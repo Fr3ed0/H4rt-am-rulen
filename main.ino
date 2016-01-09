@@ -1,5 +1,5 @@
 //=======================================================
-//This Programm is made by Frederic Wolf and his army of minions
+//This Programm is made by Daniel Stollenwerk and his army of minions
 //System Design Project University Freiburg WS15/16
 //Insert all Contributors here
 //Made 2015/2016
