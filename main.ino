@@ -20,7 +20,7 @@ int midIRPin = A0;
 
 // Initialize variables
 const float kP = 0.5;
-const float kI = 0;
+const float kI = 0.006;
 const float kD = 0;
 int leftSensorAdjust = -14; //use those to calibrate sensors
 int rightSensorAdjust = 0;
@@ -43,6 +43,8 @@ int midError;
 
 int turn;
 
+long integral;
+
 //values for motorspeed
 byte leftSpeed;
 byte rightSpeed;
@@ -51,7 +53,7 @@ byte rightSpeed;
 int trashL; //used to trash the first reading 
 int trashR;
 int trashMid;
-
+//left Sensor
 int leftSensor0; // we will meassure 5 times each sensore and only use the average value
 int leftSensor1;
 int leftSensor2;
@@ -59,7 +61,7 @@ int leftSensor3;
 int leftSensor4;
 int leftSensorAvg; //the average value of the raw data
 int leftSensor; //the value which we will actually use avg-offset
-
+//right Sensor
 int rightSensor0;
 int rightSensor1;
 int rightSensor2;
@@ -67,8 +69,6 @@ int rightSensor3;
 int rightSensor4;
 int rightSensorAvg;
 int rightSensor;
-
-
 //This is the only actual PID-Sensor
 int midSensor0;
 int midSensor1;
@@ -97,6 +97,7 @@ void setup() {
       rightMotor->run(FORWARD);
     //  leftMotor->run(BACKWARD);
     //  rightMotor->run(BACKWARD);
+    integral = 0 ;
   
   //TODO make tests for all them hardware!
     Serial.println("Adafruit Motorshield v2 - ready!");
@@ -151,6 +152,9 @@ void loop() {
     leftError = leftTarget - leftSensor;
     rightError = rightTarget - rightSensor;
     midError = midTarget - midSensor;
+
+
+    integral = integral + midError;
     
     #ifdef DEBUGSENSOR
     Serial.println(String(leftSensor) + " " + String(rightSensor)
@@ -163,7 +167,7 @@ void loop() {
     //TODO adding the other parts of our PID! 
     //from now on on we totally ignore our second sensor
     
-    turn = midError * kP;
+    turn = midError * kP + kI * integral;
 
     leftSpeed = leftTargetSpeed + turn;
     rightSpeed = rightTargetSpeed - turn;
@@ -173,7 +177,7 @@ void loop() {
     rightMotor->setSpeed(rightSpeed);
 
 #ifdef DEBUG
-    Serial.println(String(midError) + " " + String(leftSpeed) + " " + String(rightSpeed));
+    Serial.println(String(midError) + " " + String(integral) + " " + String(leftSpeed) + " " + String(rightSpeed));
 #endif
     
   }
