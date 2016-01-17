@@ -14,9 +14,9 @@ Adafruit_DCMotor *rightMotor = AFMS.getMotor(2);
 //#define DEBUGSENSOR
 
 //Sensor pins
-int leftIRPin = A0;
-int rightIRPin = A1;
-int midIRPin = A2;
+int leftIRPin = A1;
+int rightIRPin = A2;
+int midIRPin = A0;
 
 // Initialize variables
 const float kP = 0.5;
@@ -34,7 +34,7 @@ const byte rightTargetSpeed = 80; // goes from 0-255.
 //place sensors between black and weight and insert proper readings
 int leftTarget = 560;
 int rightTarget = 560;
-int midTarget = 1337;
+int midTarget = 620; //the darker the sourroundings the higer tis value should be
 
 //leftError is the reading - the target
 int leftError;
@@ -173,8 +173,7 @@ void loop() {
     rightMotor->setSpeed(rightSpeed);
 
 #ifdef DEBUG
-    Serial.println(String(leftError) + " " + String(rightError)
-    + " " + String(leftSpeed) + " " + String(rightSpeed));
+    Serial.println(String(midError) + " " + String(leftSpeed) + " " + String(rightSpeed));
 #endif
     
   }
