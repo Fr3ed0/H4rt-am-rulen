@@ -20,7 +20,7 @@ int midIRPin = A0;
 
 // Initialize variables
 const float kP = 0.5;
-const float kI = 0.006;
+const float kI = 0.003;
 const float kD = 0;
 int leftSensorAdjust = -14; //use those to calibrate sensors
 int rightSensorAdjust = 0;
@@ -44,6 +44,7 @@ int midError;
 int turn;
 
 long integral;
+int derivative;
 
 //values for motorspeed
 byte leftSpeed;
@@ -155,6 +156,8 @@ void loop() {
 
 
     integral = integral + midError;
+
+
     
     #ifdef DEBUGSENSOR
     Serial.println(String(leftSensor) + " " + String(rightSensor)
@@ -167,7 +170,7 @@ void loop() {
     //TODO adding the other parts of our PID! 
     //from now on on we totally ignore our second sensor
     
-    turn = midError * kP + kI * integral;
+    turn = midError * kP + kI * integral + kD * derivative;
 
     leftSpeed = leftTargetSpeed + turn;
     rightSpeed = rightTargetSpeed - turn;
