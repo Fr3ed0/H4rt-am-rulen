@@ -36,7 +36,7 @@ int leftTarget = 560;
 int rightTarget = 560;
 int midTarget = 620; //the darker the sourroundings the higer tis value should be
 
-//leftError is the reading - the target
+//leftError is (the reading - the target)
 int leftError;
 int rightError;
 int midError;
@@ -116,7 +116,7 @@ void loop() {
   //pure magic means our prozessor has a sense of time which he will tell us with "millis"
   //in this loop we get our n-1 readings (the first one always gets trashed) 
   if((millis() - jetzt) > deltaT){
-    jetzt = millis(); 
+    jetzt = millis();  //TODO FIX OVERFLOW for jetzt
     //getting new values - since i dont know how to proper use an array it looks like that
     trashL = analogRead(leftIRPin);
     trashR = analogRead(rightIRPin);
