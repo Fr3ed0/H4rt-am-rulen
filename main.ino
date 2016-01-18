@@ -44,7 +44,13 @@ int midError;
 int turn;
 
 long integral;
+
+//stuff dor d
 int derivative;
+long i = 1;
+byte k;
+int bPrevError = 0;
+int aPrevError = 0;
 
 //values for motorspeed
 byte leftSpeed;
@@ -157,23 +163,30 @@ void loop() {
 
     integral = integral + midError;
 
-
-    
-    #ifdef DEBUGSENSOR
-    Serial.println(String(leftSensor) + " " + String(rightSensor)
-    + " " + String(leftSensor2) + " " + String(rightSensor3) + " " + String(jetzt));
-    #endif
+    //adding the nessesary things for the derivative -Whoppa FlipFlop Style
+    //TODO fix OVERFLOW FOR i
+    i++;
+    k = i % 2; 
+    if(k == 1){
+      midError = aPrevError;
+      derivative = midError + bPrevError;
+      }
+     if (k == 0){
+      midError = bPrevError;
+      derivative = midError + aPrevError;
+       }
     }
 
 
     //Heres how we adjust the motorspeeds!
-    //TODO adding the other parts of our PID! 
     //from now on on we totally ignore our second sensor
     
     turn = midError * kP + kI * integral + kD * derivative;
 
     leftSpeed = leftTargetSpeed + turn;
     rightSpeed = rightTargetSpeed - turn;
+    
+    //TODO fix OVERFLOW for Speed
     
     //Adjusting the Motorspeeds to get the turn!
     leftMotor->setSpeed(leftSpeed);
