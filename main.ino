@@ -169,11 +169,11 @@ void loop() {
     k = i % 2; 
     if(k == 1){
       midError = aPrevError;
-      derivative = midError + bPrevError;
+      derivative = midError - bPrevError;
       }
      if (k == 0){
       midError = bPrevError;
-      derivative = midError + aPrevError;
+      derivative = midError - aPrevError;
        }
     }
 
