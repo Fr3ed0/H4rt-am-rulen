@@ -1,5 +1,6 @@
-//Written by Frederic "Fr3ed0" Wolf
+//Copyright Frederic "Fr3ed0" Wolf
 //2015-2016
+
 #include <Wire.h>
 #include <Adafruit_MotorShield.h>
 #include <math.h>
@@ -12,8 +13,12 @@ Adafruit_DCMotor *leftMotor = AFMS.getMotor(1);
 Adafruit_DCMotor *rightMotor = AFMS.getMotor(2);
 
 //we will use the #define stuff. ask me about it! DEACTIVATE BEFORE THE RACE STARTS!
-#define DEBUG // if active we are in the DEBUGGING mode, firing all the println guns
-//#define DEBUGSENSOR
+//#define DEBUG // if active we are in the DEBUGGING mode, firing the Serial.println guns
+
+// #define SENSORADJUST // use this one FIRST:  *SensorAdjust to make all Sensors equal
+// #define MIDSENSOR // use midTarget to make midError = 0 if Sensor is placed on grey
+//#define LEFTSENSOR //
+//#define RIGHTSENSOR //
 
 //Sensor pins
 int leftIRPin = A1;
@@ -188,8 +193,8 @@ void loop() {
     leftSpeed = leftTargetSpeed + turn;
     rightSpeed = rightTargetSpeed - turn;
     
-// HACKED: If speed is > 255 we might want to use the overflow instead of trash it.
-// e.G turn == 300 -> 300-255 = 45 => Motor 1: 255 Motor2: leftSpeed - 45 (instead of just leftSpeed)
+    // HACKED: If speed is > 255 we might want to use the overflow instead of trash it.
+    // e.G turn == 300 -> 300-255 = 45 => Motor 1: 255 Motor2: leftSpeed - 45 (instead of just leftSpeed)
     
     if (leftSpeed >= 255){
       leftSpeed == 255;
@@ -208,8 +213,27 @@ void loop() {
     leftMotor->setSpeed(leftSpeed);
     rightMotor->setSpeed(rightSpeed);
 
-#ifdef DEBUG
+    #ifdef DEBUG
     Serial.println(String(midError) + " " + String(integral) + " " + String(derivative) + " " + String(turn) + " " + String(leftSpeed) + " " + String(rightSpeed));
-#endif
+    #endif
+
+    #ifdef SENSORADJUST
+    Serial.println(String("Mavg: ") + int(midSensorAvg) + String("Lavg: ") + int(leftSensorAvg) String("Ravg: ") + int(rightSensorAvg) +
+                    String("ML = 0?: ") + int(midSensorAvg - leftSensorAvg) + String("MR = 0?: ") + int(midSensorAvg - rightSensorAvg));
+    #endif
+
+    #ifdef MIDSENSOR
+    Serial.println(String("Mavg: ") + int(midSensorAvg) + int(midTarget) + String("0 on grey?: ") + int(midError));
+    #endif
+
+    
+    #ifdef LEFTSENSOR
+    Serial.println(String("Lavg: ") + int(leftSensorAvg) + int(leftTarget) + String("0 on grey?: ") + int(leftError));
+    #endif
+
+    
+    #ifdef RIGHTSENSOR
+    Serial.println(String("Ravg: ") + int(rightSensorAvg) + int(rightTarget) + String("0 on grey?: ") + int(rightError) );
+    #endif
     
   }
