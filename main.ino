@@ -1,3 +1,4 @@
+
 #include <Wire.h>
 #include <Adafruit_MotorShield.h>
 #include <math.h>
@@ -179,21 +180,35 @@ void loop() {
 
 
     //Heres how we adjust the motorspeeds!
-    //from now on on we totally ignore our second sensor
+    //from now on on we totally ignore our secondary sensors
     
     turn = midError * kP + kI * integral + kD * derivative;
 
     leftSpeed = leftTargetSpeed + turn;
     rightSpeed = rightTargetSpeed - turn;
     
-    //TODO fix OVERFLOW for Speed
+// HACKED: If speed is > 255 we might want to use the overflow instead of trash it.
+// e.G turn == 300 -> 300-255 = 45 => Motor 1: 255 Motor2: leftSpeed - 45 (instead of just leftSpeed)
     
-    //Adjusting the Motorspeeds to get the turn!
+    if (leftSpeed >= 255){
+      leftSpeed == 255;
+    }
+    if (rightSpeed >= 255){
+      rightSpeed == 255;
+    }
+    if (leftSpeed <= 0) {
+      leftSpeed == 0;
+    }
+    if (rightSpeed <= 0){
+      rightSpeed == 0;
+    }
+    
+    //Adjusting the Motorspeeds to get the turn!(via i2c)
     leftMotor->setSpeed(leftSpeed);
     rightMotor->setSpeed(rightSpeed);
 
 #ifdef DEBUG
-    Serial.println(String(midError) + " " + String(integral) + " " + String(leftSpeed) + " " + String(rightSpeed));
+    Serial.println(String(midError) + " " + String(integral) + " " + String(derivative) + " " + String(turn) + " " + String(leftSpeed) + " " + String(rightSpeed));
 #endif
     
   }
