@@ -1,4 +1,5 @@
-
+//Written by Frederic "Fr3ed0" Wolf
+//2015-2016
 #include <Wire.h>
 #include <Adafruit_MotorShield.h>
 #include <math.h>
