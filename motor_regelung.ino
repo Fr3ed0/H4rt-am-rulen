@@ -33,10 +33,13 @@ void setup() {
   
   leftMotor->run(FORWARD);
   rightMotor->run(FORWARD);
-
+  
+  rightMotor->setSpeed(120);
+  leftMotor->setSpeed(120);
   
   #ifdef DEBUG
-  rightMotor->setSpeed(255);
+  leftMotor->run(RELEASE);
+  rightMotor->run(RELEASE);
   #endif
 }
 
@@ -60,4 +63,14 @@ void loop() {
   }
   
     tempo = tempoaMax + tempobMax;
+    Serial.println(int(tempo));
 }
+
+
+
+
+
+
+
+
+
