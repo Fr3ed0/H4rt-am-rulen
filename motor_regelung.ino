@@ -8,8 +8,8 @@
 
 
 Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
-Adafruit_DCMotor *rightMotor = AFMS.getMotor(1);
-Adafruit_DCMotor *leftMotor = AFMS.getMotor(2);
+Adafruit_DCMotor *leftMotor = AFMS.getMotor(1);
+//Adafruit_DCMotor *rightMotor = AFMS.getMotor(2);
 
 //#define DEBUG
 byte a = digitalRead(19);
@@ -32,9 +32,9 @@ void setup() {
   AFMS.begin();  // create with the default frequency 1.6KHz
   
   leftMotor->run(FORWARD);
-  rightMotor->run(FORWARD);
+//  rightMotor->run(FORWARD);
   
-  rightMotor->setSpeed(120);
+//  rightMotor->setSpeed(120);
   leftMotor->setSpeed(120);
   
   #ifdef DEBUG
@@ -49,16 +49,34 @@ void loop() {
     h++;
  }
   g = h % 2;
+  // this is our first timed intervall
   if(g == 0){
+    if(a == 0){
       tempobMax = tempob;
       tempob = 0;
       tempoa ++;
       }
 
+      if(a == 0){
+      tempobMax = tempob;
+      tempob = 0;
+      tempoa ++;
+      }
+  }
+  
+  //this is our other timed intervall
   if(g == 1){
+    if(a == 0){
     tempoaMax = tempoa;
     tempoa = 0;
-    tempob ++;
+    tempob = a++;
+    }
+     if(a == 1){
+    tempoaMax = tempoa;
+    tempoa = 0;
+    tempob = a++;
+    }
+    
   }
   
     tempo = tempoaMax + tempobMax;
