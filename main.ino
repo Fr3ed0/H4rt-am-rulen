@@ -176,8 +176,8 @@ void loop() {
     //IntegralStuff
     //FIXME: maybe +-10 isnt big enough
     integral = integral + midError;
-    if(midError >= 10 || midError <= -10){
-      integral == 0;
+    if(midError<=10 && midError>=-10){
+      integral = 0;
     }
       
     //derivate stuff
