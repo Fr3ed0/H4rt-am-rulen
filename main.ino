@@ -15,10 +15,10 @@ Adafruit_DCMotor *rightMotor = AFMS.getMotor(2);
 //we will use the #define stuff. ask me about it! DEACTIVATE BEFORE THE RACE STARTS!
 //#define DEBUG // if active we are in the DEBUGGING mode, firing the Serial.println guns
 
-#define SENSORADJUST // use this one FIRST:  *SensorAdjust to make all Sensors equal
+//#define SENSORADJUST // use this one FIRST:  *SensorAdjust to make all Sensors equal
 #define MIDSENSOR // use midTarget to make midError = 0 if Sensor is placed on grey
-#define LEFTSENSOR //
-#define RIGHTSENSOR //
+//#define LEFTSENSOR //
+//#define RIGHTSENSOR //
 
 //Sensor pins
 int leftIRPin = A1;
@@ -39,9 +39,9 @@ const byte rightTargetSpeed = 80; // goes from 0-255.
 
 //the target values for the sensors. if those are unchanged the robot will go straight
 //place sensors between black and weight and insert proper readings
-int leftTarget = 560;
-int rightTarget = 560;
-int midTarget = 620; //the darker the sourroundings the higer tis value should be
+int leftTarget = 0;
+int rightTarget = 0;
+int midTarget = 0; //the darker the sourroundings the higer tis value should be
 
 //leftError is (the reading - the target)
 int leftError;
@@ -52,7 +52,7 @@ int turn;
 
 long integral;
 
-//stuff dor d
+//derivative stuff
 int derivative;
 long i = 1;
 byte k;
@@ -117,7 +117,7 @@ void setup() {
       rightMotor->run(FORWARD);
     //  leftMotor->run(BACKWARD);
     //  rightMotor->run(BACKWARD);
-    integral = 0 ;
+     integral = 0 ;
   
   //TODO make tests for all them hardware!
 //    Serial.println("Adafruit Motorshield v2 - ready!");
@@ -173,35 +173,40 @@ void loop() {
     rightError = rightTarget - rightSensor;
     midError = midTarget - midSensor;
 
-
+    //IntegralStuff
+    //FIXME: maybe +-10 isnt big enough
     integral = integral + midError;
-
+    if(midError >= 10 || midError <= -10){
+      integral == 0;
+    }
+      
+    //derivate stuff
     //adding the nessesary things for the derivative -Whoppa FlipFlop Style
     //TODO fix OVERFLOW FOR i
-    i++;
-    k = i % 2; 
-    if(k == 1){
-      midError = aPrevError;
-      derivative = midError - bPrevError;
-      }
-     if (k == 0){
-      midError = bPrevError;
-      derivative = midError - aPrevError;
+//    i++;
+//    k = i % 2; 
+//    if(k == 1){
+//      aPrevError = midError;
+//      derivative = midError - bPrevError;
+//      }
+//     if (k == 0){
+//      bPrevError = midError ;
+//      derivative = midError - aPrevError;
+//        }
       
 #ifdef SENSORADJUST
 int ml = (midSensorAvg - leftSensorAvg);
 int mr = (midSensorAvg - rightSensorAvg); 
 #endif
 
-      
-       }
+       
     }
 
 
     //Heres how we adjust the motorspeeds!
     //from now on on we totally ignore our secondary sensors
-    
-    turn = midError * kP + kI * integral + kD * derivative;
+    //+ kD * derivative
+    turn = midError * kP + kI * integral;
 
     leftSpeed = leftTargetSpeed + turn;
     rightSpeed = rightTargetSpeed - turn;
@@ -227,7 +232,7 @@ int mr = (midSensorAvg - rightSensorAvg);
     rightMotor->setSpeed(rightSpeed);
 
     #ifdef DEBUG
-    Serial.println(String(midError) + " " + String(integral) + " " + String(derivative) + " " + String(turn) + " " + String(leftSpeed) + " " + String(rightSpeed));
+    Serial.println(String(midError) + " " + String(integral) + " " + int(derivative) + " " + String(turn) + " " + String(leftSpeed) + " " + String(rightSpeed));
     #endif
 
     #ifdef SENSORADJUST
@@ -236,17 +241,17 @@ int mr = (midSensorAvg - rightSensorAvg);
     #endif
 
     #ifdef MIDSENSOR
-    Serial.println(String("Mavg: ") + int(midSensorAvg) + int(midTarget) + String("0 on grey?: ") + int(midError));
+    Serial.println(String("Mavg: ") + int(midSensorAvg)  + String(" on grey? 0=>?: ") + int(midError));
     #endif
 
     
     #ifdef LEFTSENSOR
-    Serial.println(String("Lavg: ") + int(leftSensorAvg) + int(leftTarget) + String("0 on grey?: ") + int(leftError));
+    Serial.println(String("Lavg: ") + int(leftSensorAvg) + String(" on grey? 0=>?: ") + int(leftError));
     #endif
 
     
     #ifdef RIGHTSENSOR
-    Serial.println(String("Ravg: ") + int(rightSensorAvg) + int(rightTarget) + String("0 on grey?: ") + int(rightError) );
+    Serial.println(String("Ravg: ") + int(rightSensorAvg) + String(" on grey? 0=>?: ") + int(rightError));
     #endif
     
   }
