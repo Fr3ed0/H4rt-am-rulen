@@ -13,10 +13,10 @@ Adafruit_DCMotor *leftMotor = AFMS.getMotor(1);
 Adafruit_DCMotor *rightMotor = AFMS.getMotor(2);
 
 //we will use the #define stuff. ask me about it! DEACTIVATE BEFORE THE RACE STARTS!
-//#define DEBUG // if active we are in the DEBUGGING mode, firing the Serial.println guns
+#define DEBUG // if active we are in the DEBUGGING mode, firing the Serial.println guns
 
 //#define SENSORADJUST // use this one FIRST:  *SensorAdjust to make all Sensors equal
-#define MIDSENSOR // use midTarget to make midError = 0 if Sensor is placed on grey
+//#define MIDSENSOR // use midTarget to make midError = 0 if Sensor is placed on grey
 //#define LEFTSENSOR //
 //#define RIGHTSENSOR //
 
@@ -41,7 +41,7 @@ const byte rightTargetSpeed = 80; // goes from 0-255.
 //place sensors between black and weight and insert proper readings
 int leftTarget = 0;
 int rightTarget = 0;
-int midTarget = 0; //the darker the sourroundings the higer tis value should be
+int midTarget = 550; //the darker the sourroundings the higer tis value should be
 
 //leftError is (the reading - the target)
 int leftError;
@@ -183,16 +183,16 @@ void loop() {
     //derivate stuff
     //adding the nessesary things for the derivative -Whoppa FlipFlop Style
     //TODO fix OVERFLOW FOR i
-//    i++;
-//    k = i % 2; 
-//    if(k == 1){
-//      aPrevError = midError;
-//      derivative = midError - bPrevError;
-//      }
-//     if (k == 0){
-//      bPrevError = midError ;
-//      derivative = midError - aPrevError;
-//        }
+    i++;
+    k = i % 2; 
+    if(k == 1){
+      aPrevError = midError;
+      derivative = midError - bPrevError;
+      }
+     if (k == 0){
+      bPrevError = midError ;
+      derivative = midError - aPrevError;
+        }
       
 #ifdef SENSORADJUST
 int ml = (midSensorAvg - leftSensorAvg);
@@ -205,8 +205,8 @@ int mr = (midSensorAvg - rightSensorAvg);
 
     //Heres how we adjust the motorspeeds!
     //from now on on we totally ignore our secondary sensors
-    //+ kD * derivative
-    turn = midError * kP + kI * integral;
+    //
+    turn = midError * kP + kI * integral + kD * derivative;
 
     leftSpeed = leftTargetSpeed + turn;
     rightSpeed = rightTargetSpeed - turn;
