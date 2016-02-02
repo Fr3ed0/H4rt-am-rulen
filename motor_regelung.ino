@@ -51,13 +51,14 @@ void loop() {
   g = h % 2;
   // this is our first timed intervall
   if(g == 0){
+    
     if(a == 0){
       tempobMax = tempob;
       tempob = 0;
       tempoa ++;
       }
 
-      if(a == 0){
+      if(a == 1){
       tempobMax = tempob;
       tempob = 0;
       tempoa ++;
