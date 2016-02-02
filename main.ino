@@ -15,10 +15,10 @@ Adafruit_DCMotor *rightMotor = AFMS.getMotor(2);
 //we will use the #define stuff. ask me about it! DEACTIVATE BEFORE THE RACE STARTS!
 //#define DEBUG // if active we are in the DEBUGGING mode, firing the Serial.println guns
 
-// #define SENSORADJUST // use this one FIRST:  *SensorAdjust to make all Sensors equal
-// #define MIDSENSOR // use midTarget to make midError = 0 if Sensor is placed on grey
-//#define LEFTSENSOR //
-//#define RIGHTSENSOR //
+#define SENSORADJUST // use this one FIRST:  *SensorAdjust to make all Sensors equal
+#define MIDSENSOR // use midTarget to make midError = 0 if Sensor is placed on grey
+#define LEFTSENSOR //
+#define RIGHTSENSOR //
 
 //Sensor pins
 int leftIRPin = A1;
@@ -93,6 +93,12 @@ int trashM;
 int midSensorAvg;
 int midSensor;
 
+#ifdef SENSORADJUST
+int ml;
+int mr; 
+#endif
+
+
 //delta t time loop
 long jetzt = 0;
 int deltaT = 30; //we have to see if this is to high or to low
@@ -114,8 +120,8 @@ void setup() {
     integral = 0 ;
   
   //TODO make tests for all them hardware!
-    Serial.println("Adafruit Motorshield v2 - ready!");
-    Serial.println("All Systems GO!");
+//    Serial.println("Adafruit Motorshield v2 - ready!");
+//    Serial.println("All Systems GO!");
 }
 
 void loop() {
@@ -181,6 +187,13 @@ void loop() {
      if (k == 0){
       midError = bPrevError;
       derivative = midError - aPrevError;
+      
+#ifdef SENSORADJUST
+int ml = (midSensorAvg - leftSensorAvg);
+int mr = (midSensorAvg - rightSensorAvg); 
+#endif
+
+      
        }
     }
 
@@ -218,8 +231,8 @@ void loop() {
     #endif
 
     #ifdef SENSORADJUST
-    Serial.println(String("Mavg: ") + int(midSensorAvg) + String("Lavg: ") + int(leftSensorAvg) String("Ravg: ") + int(rightSensorAvg) +
-                    String("ML = 0?: ") + int(midSensorAvg - leftSensorAvg) + String("MR = 0?: ") + int(midSensorAvg - rightSensorAvg));
+    Serial.println(String("Mavg: ") + int(midSensorAvg) + String("Lavg: ") + int(leftSensorAvg) + String("Ravg: ") + int(rightSensorAvg) +
+    String("ML = 0?: ") + int(ml) + String("MR = 0?: ") + int(mr));
     #endif
 
     #ifdef MIDSENSOR
