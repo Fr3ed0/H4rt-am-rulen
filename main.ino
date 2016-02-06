@@ -13,12 +13,13 @@ Adafruit_DCMotor *leftMotor = AFMS.getMotor(1);
 Adafruit_DCMotor *rightMotor = AFMS.getMotor(2);
 
 //we will use the #define stuff. ask me about it! DEACTIVATE BEFORE THE RACE STARTS!
-#define DEBUG // if active we are in the DEBUGGING mode, firing the Serial.println guns
+//#define DEBUG // if active we are in the DEBUGGING mode, firing the Serial.println guns
 
 //#define SENSORADJUST // use this one FIRST:  *SensorAdjust to make all Sensors equal
 //#define MIDSENSOR // use midTarget to make midError = 0 if Sensor is placed on grey
 //#define LEFTSENSOR //
 //#define RIGHTSENSOR //
+#define MOTOR
 
 //Sensor pins
 int leftIRPin = A1;
@@ -26,22 +27,22 @@ int rightIRPin = A2;
 int midIRPin = A0;
 
 // Initialize variables
-const float kP = 0.5;
+const float kP = 1.2;
 const float kI = 0.003;
-const float kD = 0;
+const float kD = 0.;
 int leftSensorAdjust = -14; //use those to calibrate sensors
 int rightSensorAdjust = 0;
 int midSensorAdjust = 0;
 
 //TargetSpeed is the power the motors will get if we want the robot to drive straight.
-const byte leftTargetSpeed = 80; // we are using a byte here, because the motorshield
-const byte rightTargetSpeed = 80; // goes from 0-255.
+const byte leftTargetSpeed = 60; // we are using a byte here, because the motorshield
+const byte rightTargetSpeed = 60; // goes from 0-255.
 
 //the target values for the sensors. if those are unchanged the robot will go straight
 //place sensors between black and weight and insert proper readings
-int leftTarget = 0;
-int rightTarget = 0;
-int midTarget = 550; //the darker the sourroundings the higer tis value should be
+int leftTarget = 80;
+int rightTarget = 60;
+int midTarget = 580; //the darker the sourroundings the higer tis value should be
 
 //leftError is (the reading - the target)
 int leftError;
@@ -54,14 +55,13 @@ long integral;
 
 //derivative stuff
 int derivative;
-long i = 1;
-byte k;
+byte i;
 int bPrevError = 0;
 int aPrevError = 0;
 
 //values for motorspeed
-byte leftSpeed;
-byte rightSpeed;
+int leftSpeed;
+int rightSpeed;
 
 //lightSensorStuff
 int trashL; //used to trash the first reading 
@@ -99,11 +99,49 @@ int mr;
 #endif
 
 
+//Interrupt motor adjust stuff
+
+volatile  uint8_t lastB = 0;   
+volatile  uint16_t counterA;
+volatile  uint16_t counterB;
+volatile int8_t altAB = 0;
+volatile long encoderWert = 0;
+ 
+
+#define LINKERMOTORPIN 2
+#define RECHTERMOTORPIN 3
+
+#define GREIFARMPINA 4
+#define GREIFARMPINB 5
+
+//tacho stuff
+int altwertA;
+int altwert;
+int neuwert;
+const byte deltaTacho=100; // chose your value according to your prefered max range 
+
+//greifarm stuff
+int8_t schrittTab[16] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0}; 
+
+
+
 //delta t time loop
 long jetzt = 0;
-int deltaT = 30; //we have to see if this is to high or to low
+long altZeit, altZeitb;
+int deltaT = 1; //we have to see if this is to high or to low
 
 void setup() {
+
+  //Interrupt stuff
+PCICR |= (1 << PCIE2); //arduino will react on interrupts on port D
+PCMSK2 |= (1 << LINKERMOTORPIN); // 2 defines the pin which listens for motor encoder (must be on portD)
+PCMSK2 |= (1 << RECHTERMOTORPIN); // for the second motor ** 00001100
+PCMSK2 |= (1 << GREIFARMPINA);
+PCMSK2 |= (1 << GREIFARMPINB);
+DDRD&=~PCMSK2; //if DDRD is 0 on the specific bit = input
+
+
+  
   Serial.begin(9600);           // set up Serial baud to 115200 bps
   AFMS.begin();  // start motorshield with the default frequency 1.6KHz
   //AFMS.begin(1000);  // OR with a different frequency, say 1KHz
@@ -115,38 +153,64 @@ void setup() {
     // Set motor direction
       leftMotor->run(FORWARD);
       rightMotor->run(FORWARD);
-    //  leftMotor->run(BACKWARD);
+      leftMotor->run(RELEASE);
+//  leftMotor->run(BACKWARD);
     //  rightMotor->run(BACKWARD);
      integral = 0 ;
   
   //TODO make tests for all them hardware!
 //    Serial.println("Adafruit Motorshield v2 - ready!");
 //    Serial.println("All Systems GO!");
+
+interrupts();
 }
 
 void loop() {
+static  uint16_t altwertA;
+uint16_t SpeedA;
   //a super time-get-right loop which is fueled by pure magic
   //pure magic means our prozessor has a sense of time which he will tell us with "millis"
   //in this loop we get our n-1 readings (the first one always gets trashed) 
-  if((millis() - jetzt) > deltaT){
-    jetzt = millis();  //TODO FIX OVERFLOW for jetzt
-    //getting new values - since i dont know how to proper use an array it looks like that
-    trashL = analogRead(leftIRPin);
-    trashR = analogRead(rightIRPin);
-    trashMid = analogRead(midIRPin);
+  jetzt = millis();
+  
+  if((jetzt - altZeitb) > deltaTacho){
+    altZeitb = jetzt;    
+    SpeedA=counterA-altwertA;
+    altwertA=counterA;
     
+ #ifdef MOTOR
+  Serial.println(SpeedA);
+  
+  #endif
+  }  
+
+  
+  if((jetzt - altZeit) > deltaT){
+//   #ifdef DEBUG 
+    Serial.println((jetzt - altZeit));
+//    #endif
+    altZeit = jetzt;
+      //TODO FIX OVERFLOW for jetzt
+    //getting new values - since i dont know how to proper use an array it looks like that
+   
+    
+    
+    
+  trashL = analogRead(leftIRPin);  
   leftSensor0 = analogRead(leftIRPin);
   leftSensor1 = analogRead(leftIRPin);
   leftSensor2 = analogRead(leftIRPin);
   leftSensor3 = analogRead(leftIRPin);
   leftSensor4 = analogRead(leftIRPin);
   
+  trashR = analogRead(rightIRPin);
   rightSensor0 = analogRead(rightIRPin);
   rightSensor1 = analogRead(rightIRPin);
   rightSensor2 = analogRead(rightIRPin);
   rightSensor3 = analogRead(rightIRPin);
   rightSensor4 = analogRead(rightIRPin);
-
+  
+  trashMid = analogRead(midIRPin);
   midSensor0 = analogRead(midIRPin);
   midSensor1 = analogRead(midIRPin);
   midSensor2 = analogRead(midIRPin);
@@ -182,14 +246,11 @@ void loop() {
       
     //derivate stuff
     //adding the nessesary things for the derivative -Whoppa FlipFlop Style
-    //TODO fix OVERFLOW FOR i
     i++;
-    k = i % 2; 
-    if(k == 1){
+    if((i % 2) == 0){
       aPrevError = midError;
       derivative = midError - bPrevError;
-      }
-     if (k == 0){
+      } else {
       bPrevError = midError ;
       derivative = midError - aPrevError;
         }
@@ -197,11 +258,10 @@ void loop() {
 #ifdef SENSORADJUST
 int ml = (midSensorAvg - leftSensorAvg);
 int mr = (midSensorAvg - rightSensorAvg); 
-#endif
-
-       
+#endif       
     }
 
+  
 
     //Heres how we adjust the motorspeeds!
     //from now on on we totally ignore our secondary sensors
@@ -215,24 +275,27 @@ int mr = (midSensorAvg - rightSensorAvg);
     // e.G turn == 300 -> 300-255 = 45 => Motor 1: 255 Motor2: leftSpeed - 45 (instead of just leftSpeed)
     
     if (leftSpeed >= 255){
-      leftSpeed == 255;
+      leftSpeed = 255;
     }
     if (rightSpeed >= 255){
-      rightSpeed == 255;
+      rightSpeed = 255;
     }
     if (leftSpeed <= 0) {
-      leftSpeed == 0;
+      leftSpeed = 0;
     }
     if (rightSpeed <= 0){
-      rightSpeed == 0;
+      rightSpeed = 0;
     }
     
     //Adjusting the Motorspeeds to get the turn!(via i2c)
-    leftMotor->setSpeed(leftSpeed);
-    rightMotor->setSpeed(rightSpeed);
+  //  leftMotor->setSpeed(leftSpeed);
+  //  rightMotor->setSpeed(rightSpeed);
+
+    leftMotor->setSpeed(255);
+    rightMotor->setSpeed(255);
 
     #ifdef DEBUG
-    Serial.println(String(midError) + " " + String(integral) + " " + int(derivative) + " " + String(turn) + " " + String(leftSpeed) + " " + String(rightSpeed));
+    Serial.println(String(midError) + "\t " + String(integral) + "\t" + int(derivative) + "\t" + String(turn) + "\t" + String(leftSpeed) + "\t" + String(rightSpeed));
     #endif
 
     #ifdef SENSORADJUST
@@ -255,3 +318,34 @@ int mr = (midSensorAvg - rightSensorAvg);
     #endif
     
   }
+
+
+
+
+
+ISR(PCINT2_vect){ //speciifc routine
+
+  uint8_t newB = PIND;                  // aktuellen Port speichern
+  uint8_t chgB = newB ^ lastB;          // geänderte Bits zum letzten Port
+  lastB = newB;                         // neuer Port wird zum alten für die nächste Runde
+
+  if (chgB) {                             // wenn mindestens 1 Bit geändert   
+    
+    if (chgB & (1 << LINKERMOTORPIN)) {
+     counterA++;
+    }
+     if (chgB & (1 << RECHTERMOTORPIN)) {
+     counterB++;
+    }
+    if (chgB & ((1 <<GREIFARMPINA) | (1 << GREIFARMPINB)) ){
+        altAB <<= 2; 
+        altAB &= B00001100;
+   //   altAB |= ((0b00000100 & newB) << 1) | (0b00001000 & newB); 
+   //   altAB |= (((1 << GREIFARMPINA) & newB) << 1) | ((1 << GREIFARMPINB) & newB);
+        altAB |= (digitalRead(GREIFARMPINA) << 1) | digitalRead(GREIFARMPINB); 
+        encoderWert += schrittTab[altAB];
+    }
+
+  }
+}
+  
