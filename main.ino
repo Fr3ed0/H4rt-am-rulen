@@ -128,7 +128,7 @@ int8_t schrittTab[16] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0};
 //delta t time loop
 long jetzt = 0;
 long altZeit, altZeitb;
-int deltaT = 15; //we have to see if this is to high or to low
+const byte deltaT = 15; //we have to see if this is to high or to low
 
 void setup() {
 
