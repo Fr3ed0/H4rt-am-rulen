@@ -1,0 +1,90 @@
+#include <Wire.h>
+#include <Adafruit_MotorShield.h>
+#include <math.h>
+Adafruit_MotorShield AFMS = Adafruit_MotorShield();
+Adafruit_DCMotor *leftMotor = AFMS.getMotor(1);
+Adafruit_DCMotor *rightMotor = AFMS.getMotor(2);
+
+volatile  uint8_t lastB = 0;   
+volatile  uint16_t counterA;
+volatile  uint16_t counterB;
+volatile int8_t altAB = 0;
+volatile long encoderWert = 0;
+ 
+
+#define LINKERMOTORPIN 2
+#define RECHTERMOTORPIN 3
+
+#define GREIFARMPINA 4
+#define GREIFARMPINB 5
+
+//tacho stuff
+long jetzt;
+int altZeitb;
+
+int altwertA;
+int altwert;
+int neuwert;
+const byte deltaTacho=100; // chose your value according to your prefered max range 
+
+//greifarm stuff
+int8_t schrittTab[16] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0}; 
+
+void setup() {
+PCICR |= (1 << PCIE2);
+PCMSK2 |= (1 << LINKERMOTORPIN);
+PCMSK2 |= (1 << RECHTERMOTORPIN);
+PCMSK2 |= (1 << GREIFARMPINA);
+PCMSK2 |= (1 << GREIFARMPINB);
+DDRD&=~PCMSK2;
+Serial.begin(9600);
+  AFMS.begin();
+    leftMotor->run(FORWARD);
+    leftMotor->run(RELEASE);
+    leftMotor->run(BACKWARD);
+    interrupts();
+}
+
+void loop() {
+  uint16_t SpeedA;
+  //a super time-get-right loop which is fueled by pure magic
+  //pure magic means our prozessor has a sense of time which he will tell us with "millis"
+  //in this loop we get our n-1 readings (the first one always gets trashed) 
+  jetzt = millis();
+  
+  if((jetzt - altZeitb) > deltaTacho){
+    altZeitb = jetzt;    
+    SpeedA=counterA-altwertA;
+    altwertA=counterA;
+     #ifdef MOTOR
+  Serial.println(SpeedA);
+  
+  #endif
+    }  
+}
+
+ISR(PCINT2_vect){ //speciifc routine
+
+  uint8_t newB = PIND;                  // aktuellen Port speichern
+  uint8_t chgB = newB ^ lastB;          // geänderte Bits zum letzten Port
+  lastB = newB;                         // neuer Port wird zum alten für die nächste Runde
+
+  if (chgB) {                             // wenn mindestens 1 Bit geändert   
+    
+    if (chgB & (1 << LINKERMOTORPIN)) {
+     counterA++;
+    }
+     if (chgB & (1 << RECHTERMOTORPIN)) {
+     counterB++;
+    }
+    if (chgB & ((1 <<GREIFARMPINA) | (1 << GREIFARMPINB)) ){
+        altAB <<= 2; 
+        altAB &= B00001100;
+   //   altAB |= ((0b00000100 & newB) << 1) | (0b00001000 & newB); 
+   //   altAB |= (((1 << GREIFARMPINA) & newB) << 1) | ((1 << GREIFARMPINB) & newB);
+        altAB |= (digitalRead(GREIFARMPINA) << 1) | digitalRead(GREIFARMPINB); 
+        encoderWert += schrittTab[altAB];
+    }
+
+  }
+}
