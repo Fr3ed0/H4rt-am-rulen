@@ -21,6 +21,10 @@ Adafruit_DCMotor *rightMotor = AFMS.getMotor(2);
 //#define RIGHTSENSOR //
 #define MOTOR
 
+const byte probeCount = 5;
+
+int poti = A3; 
+
 //Sensor pins
 int leftIRPin = A1;
 int rightIRPin = A2;
@@ -44,6 +48,13 @@ int leftTarget = 80;
 int rightTarget = 60;
 int midTarget = 580; //the darker the sourroundings the higer tis value should be
 
+int leftSensorAvg;
+int rightSensorAvg;
+int midSensorAvg;
+int leftSensor;
+int rightSensor;
+int midSensor;
+
 //leftError is (the reading - the target)
 int leftError;
 int rightError;
@@ -53,9 +64,12 @@ int turn;
 
 long integral;
 
+int rightPower;
+int leftPower;
+
 //derivative stuff
 int derivative;
-byte i;
+byte flip;
 int bPrevError = 0;
 int aPrevError = 0;
 
@@ -64,39 +78,18 @@ int leftSpeed;
 int rightSpeed;
 
 //lightSensorStuff
-int trashL; //used to trash the first reading 
-int trashR;
-int trashMid;
-//left Sensor
-int leftSensor0; // we will meassure 5 times each sensore and only use the average value
-int leftSensor1;
-int leftSensor2;
-int leftSensor3;
-int leftSensor4;
-int leftSensorAvg; //the average value of the raw data
-int leftSensor; //the value which we will actually use avg-offset
-//right Sensor
-int rightSensor0;
-int rightSensor1;
-int rightSensor2;
-int rightSensor3;
-int rightSensor4;
-int rightSensorAvg;
-int rightSensor;
-//This is the only actual PID-Sensor
-int midSensor0;
-int midSensor1;
-int midSensor2;
-int midSensor3;
-int midSensor4;
-int trashM;
-int midSensorAvg;
-int midSensor;
+
 
 #ifdef SENSORADJUST
 int ml;
 int mr; 
 #endif
+
+//motorPID
+int actualSpeedA; //our tacho
+int wantedSpeedB;
+int wantedSpeedA; //the value set by our pid sensor cycle
+int errorSpeedA; //the value used to adjust motor power
 
 
 //Interrupt motor adjust stuff
@@ -115,14 +108,23 @@ volatile long encoderWert = 0;
 #define GREIFARMPINB 5
 
 //tacho stuff
-int altwertA;
 int altwert;
 int neuwert;
+uint16_t altwertA;
+uint16_t SpeedA;
 const byte deltaTacho=100; // chose your value according to your prefered max range 
 
 //greifarm stuff
 int8_t schrittTab[16] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0}; 
 
+//motorregelung
+
+const float kM =1;
+const float kMI = 0.8;
+const float kMD = 0;
+float errorIntegral;
+int aSA;
+int der;
 
 
 //delta t time loop
@@ -139,6 +141,7 @@ PCMSK2 |= (1 << RECHTERMOTORPIN); // for the second motor ** 00001100
 PCMSK2 |= (1 << GREIFARMPINA);
 PCMSK2 |= (1 << GREIFARMPINB);
 DDRD&=~PCMSK2; //if DDRD is 0 on the specific bit = input
+PORTD |= PCMSK2; //arduino intern pullup resistor
 
 
   
@@ -147,17 +150,14 @@ DDRD&=~PCMSK2; //if DDRD is 0 on the specific bit = input
   //AFMS.begin(1000);  // OR with a different frequency, say 1KHz
   
     //We are reading both values and trash them. the first readings are just that.
-    trashL = analogRead(leftIRPin);
-    trashR = analogRead(rightIRPin);
-    trashM = analogRead(midIRPin);
     // Set motor direction
       leftMotor->run(FORWARD);
       rightMotor->run(FORWARD);
-      leftMotor->run(RELEASE);
+ //     leftMotor->run(RELEASE);
 //  leftMotor->run(BACKWARD);
     //  rightMotor->run(BACKWARD);
      integral = 0 ;
-  
+     errorIntegral = 0;
   //TODO make tests for all them hardware!
 //    Serial.println("Adafruit Motorshield v2 - ready!");
 //    Serial.println("All Systems GO!");
@@ -165,78 +165,55 @@ DDRD&=~PCMSK2; //if DDRD is 0 on the specific bit = input
 interrupts();
 }
 
+
 void loop() {
-static  uint16_t altwertA;
-uint16_t SpeedA;
-  //a super time-get-right loop which is fueled by pure magic
-  //pure magic means our prozessor has a sense of time which he will tell us with "millis"
-  //in this loop we get our n-1 readings (the first one always gets trashed) 
+
   jetzt = millis();
   
   if((jetzt - altZeitb) > deltaTacho){
+
+
+      wantedSpeedA =map(analogRead(poti),0,1024,0,140);
     altZeitb = jetzt;    
-    SpeedA=counterA-altwertA;
+    actualSpeedA=(counterA-altwertA)*100/deltaTacho;
     altwertA=counterA;
+
+
     
- #ifdef MOTOR
-  Serial.println(SpeedA);
-  
-  #endif
+
+      //tempomat
+      errorSpeedA = wantedSpeedA - actualSpeedA;
+      errorIntegral += errorSpeedA;
+
+
+    der=errorSpeedA - aSA;
+    aSA=errorSpeedA;
+
+      leftPower = errorSpeedA * kM + errorIntegral * kMI + wantedSpeedA *2.5 + der*kMD; 
+//wantedSpeedA *2
+         leftPower = powerOverflowProtection(leftPower);
+         rightPower = powerOverflowProtection(rightPower);
+         
+    leftMotor->setSpeed(leftPower);
+    rightMotor->setSpeed(rightPower);
+
+
+ 
   }  
 
   
   if((jetzt - altZeit) > deltaT){
+    
    #ifdef ZEIT 
     Serial.println((jetzt - altZeit));
     #endif
     altZeit = jetzt;
+    
       //TODO FIX OVERFLOW for jetzt
     //getting new values - since i dont know how to proper use an array it looks like that
    
+    sensorAbfrage();
     
-    
-    
-  trashL = analogRead(leftIRPin);  
-  leftSensor0 = analogRead(leftIRPin);
-  leftSensor1 = analogRead(leftIRPin);
-  leftSensor2 = analogRead(leftIRPin);
-  leftSensor3 = analogRead(leftIRPin);
-  leftSensor4 = analogRead(leftIRPin);
-  
-  trashR = analogRead(rightIRPin);
-  rightSensor0 = analogRead(rightIRPin);
-  rightSensor1 = analogRead(rightIRPin);
-  rightSensor2 = analogRead(rightIRPin);
-  rightSensor3 = analogRead(rightIRPin);
-  rightSensor4 = analogRead(rightIRPin);
-  
-  trashMid = analogRead(midIRPin);
-  midSensor0 = analogRead(midIRPin);
-  midSensor1 = analogRead(midIRPin);
-  midSensor2 = analogRead(midIRPin);
-  midSensor3 = analogRead(midIRPin);
-  midSensor4 = analogRead(midIRPin);
-
-    
-    //calculate the avg out of the raw sensor data ... again an array would be superbé
-    leftSensorAvg = ((leftSensor0 + leftSensor1 + leftSensor2 +
-                      leftSensor3 + leftSensor4)/5);
-    
-    rightSensorAvg = ((rightSensor0 + rightSensor1 + rightSensor2 +
-                       rightSensor3 + rightSensor4)/5);
-
-    midSensorAvg = ((midSensor0 + midSensor1 + midSensor2 + midSensor3 + midSensor4)/5);
-                       
-    //finally we get our good sensor data
-    leftSensor = leftSensorAvg - leftSensorAdjust;
-    rightSensor = rightSensorAvg - rightSensorAdjust;
-    midSensor = midSensorAvg - midSensorAdjust;
-
-    
-    leftError = leftTarget - leftSensor;
-    rightError = rightTarget - rightSensor;
-    midError = midTarget - midSensor;
-
     //IntegralStuff
     //FIXME: maybe +-10 isnt big enough
     integral = integral + midError;
@@ -246,8 +223,8 @@ uint16_t SpeedA;
       
     //derivate stuff
     //adding the nessesary things for the derivative -Whoppa FlipFlop Style
-    i++;
-    if((i % 2) == 0){
+    flip++;
+    if((flip % 2) == 0){
       aPrevError = midError;
       derivative = midError - bPrevError;
       } else {
@@ -258,69 +235,110 @@ uint16_t SpeedA;
 #ifdef SENSORADJUST
 int ml = (midSensorAvg - leftSensorAvg);
 int mr = (midSensorAvg - rightSensorAvg); 
-#endif       
-    }
-
-  
-
+#endif 
+      
     //Heres how we adjust the motorspeeds!
-    //from now on on we totally ignore our secondary sensors
-    //
+    //from now on on we totally ignore our secondary sensor
     turn = midError * kP + kI * integral + kD * derivative;
 
-    leftSpeed = leftTargetSpeed + turn;
-    rightSpeed = rightTargetSpeed - turn;
+//    wantedSpeedA = leftTargetSpeed + turn;
+//    wantedSpeedB = rightTargetSpeed - turn;
+//      rightPower = leftTargetSpeed + turn;
+//      leftPower = rightTargetSpeed - turn;
+
+
     
-    // HACKED: If speed is > 255 we might want to use the overflow instead of trash it.
-    // e.G turn == 300 -> 300-255 = 45 => Motor 1: 255 Motor2: leftSpeed - 45 (instead of just leftSpeed)
-    
-    if (leftSpeed >= 255){
-      leftSpeed = 255;
-    }
-    if (rightSpeed >= 255){
-      rightSpeed = 255;
-    }
-    if (leftSpeed <= 0) {
-      leftSpeed = 0;
-    }
-    if (rightSpeed <= 0){
-      rightSpeed = 0;
-    }
     
     //Adjusting the Motorspeeds to get the turn!(via i2c)
   //  leftMotor->setSpeed(leftSpeed);
   //  rightMotor->setSpeed(rightSpeed);
 
-    leftMotor->setSpeed(255);
-    rightMotor->setSpeed(255);
 
+
+      debugInfos();
+
+      
+    } //end of the timed loop
+
+    
+  
+    
+      
+  }// end of the void loop
+
+      byte powerOverflowProtection(int x){
+        if (x >= 255){
+          return 255;
+          } else if(x <=0) {
+            return 0;
+            }  else {
+              return byte(x);
+            }
+        
+      }
+inline void debugInfos(){
+
+    #ifdef MOTOR
+    Serial.println(String(errorSpeedA) + "\t" + String(leftPower) + "\t" + String(actualSpeedA) + "\t" + String(errorIntegral) + "\t" + "\t" + String(wantedSpeedA) );
+    #endif
+  
     #ifdef DEBUG
-    Serial.println(String(midError) + "\t " + String(integral) + "\t" + int(derivative) + "\t" + String(turn) + "\t" + String(leftSpeed) + "\t" + String(rightSpeed));
+    Serial.println(String(midError) + "\t " + String(integral) + "\t" + String(derivative) + "\t" + String(turn) + "\t" + String(leftSpeed) + "\t" + String(rightSpeed));
     #endif
 
     #ifdef SENSORADJUST
-    Serial.println(String("Mavg: ") + int(midSensorAvg) + String("Lavg: ") + int(leftSensorAvg) + String("Ravg: ") + int(rightSensorAvg) +
-    String("ML = 0?: ") + int(ml) + String("MR = 0?: ") + int(mr));
+    Serial.println(String("Mavg: ") + String(midSensorAvg) + String("Lavg: ") + String(leftSensorAvg) + String("Ravg: ") + String(rightSensorAvg) +
+    String("ML = 0?: ") + String(ml) + String("MR = 0?: ") + String(mr));
     #endif
 
     #ifdef MIDSENSOR
-    Serial.println(String("Mavg: ") + int(midSensorAvg)  + String(" on grey? 0=>?: ") + int(midError));
+    Serial.println(String("Mavg: ") + String(midSensorAvg)  + String(" on grey? 0=>?: ") + String(midError));
     #endif
 
     
     #ifdef LEFTSENSOR
-    Serial.println(String("Lavg: ") + int(leftSensorAvg) + String(" on grey? 0=>?: ") + int(leftError));
+    Serial.println(String("Lavg: ") + String(leftSensorAvg) + String(" on grey? 0=>?: ") + String(leftError));
     #endif
 
     
     #ifdef RIGHTSENSOR
-    Serial.println(String("Ravg: ") + int(rightSensorAvg) + String(" on grey? 0=>?: ") + int(rightError));
+    Serial.println(String("Ravg: ") + String(rightSensorAvg) + String(" on grey? 0=>?: ") + String(rightError));
     #endif
+  
+}
+
+
+inline int sensorMittelWert(byte sensorPin, byte probeCountHorst){
+
+    int trash;
+    long sum = 0;
     
-  }
+    trash = analogRead(sensorPin);
+    for(byte i = 0; i<probeCountHorst ;i++){
+      sum += analogRead(sensorPin);
+      }
+      
+      return sum/probeCountHorst;
+    }
 
 
-
+inline void sensorAbfrage(){
+  
+    //calculate the avg out of the raw sensor data ... again an array would be superbé
+    leftSensorAvg = sensorMittelWert(leftIRPin, probeCount);
+    rightSensorAvg = sensorMittelWert(rightIRPin, probeCount);
+    midSensorAvg = sensorMittelWert(midIRPin, probeCount);
+                       
+    //finally we get our good sensor data
+    leftSensor = leftSensorAvg - leftSensorAdjust;
+    rightSensor = rightSensorAvg - rightSensorAdjust;
+    midSensor = midSensorAvg - midSensorAdjust;
+    
+    leftError = leftTarget - leftSensor;
+    rightError = rightTarget - rightSensor;
+    midError = midTarget - midSensor;
+  
+ }
 
 
 ISR(PCINT2_vect){ //speciifc routine
@@ -329,7 +347,6 @@ ISR(PCINT2_vect){ //speciifc routine
   uint8_t chgB = newB ^ lastB;          // geänderte Bits zum letzten Port
   lastB = newB;                         // neuer Port wird zum alten für die nächste Runde
 
-  if (chgB) {                             // wenn mindestens 1 Bit geändert   
     
     if (chgB & (1 << LINKERMOTORPIN)) {
      counterA++;
@@ -346,6 +363,5 @@ ISR(PCINT2_vect){ //speciifc routine
         encoderWert += schrittTab[altAB];
     }
 
-  }
 }
   
