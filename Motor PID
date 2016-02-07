@@ -11,7 +11,6 @@ volatile  uint16_t counterB;
 volatile int8_t altAB = 0;
 volatile long encoderWert = 0;
  
-
 #define LINKERMOTORPIN 2
 #define RECHTERMOTORPIN 3
 
@@ -20,25 +19,30 @@ volatile long encoderWert = 0;
 
 //tacho stuff
 long jetzt;
-int altZeitb;
+long altZeit, altZeitb;
+int prevA;
+int newA;
 
-int altwertA;
-int altwert;
-int neuwert;
+const byte deltaT = 15;
 const byte deltaTacho=100; // chose your value according to your prefered max range 
+
+//motorPID
+int actualSpeedA; //our tacho
+int wantedSpeedA; //the value set by our pid sensor cycle
+int errorSpeedA; //the value used to adjust motor power
 
 //greifarm stuff
 int8_t schrittTab[16] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0}; 
 
 void setup() {
-PCICR |= (1 << PCIE2);
-PCMSK2 |= (1 << LINKERMOTORPIN);
-PCMSK2 |= (1 << RECHTERMOTORPIN);
-PCMSK2 |= (1 << GREIFARMPINA);
-PCMSK2 |= (1 << GREIFARMPINB);
-DDRD&=~PCMSK2;
-Serial.begin(9600);
-  AFMS.begin();
+  PCICR |= (1 << PCIE2);
+  PCMSK2 |= (1 << LINKERMOTORPIN);
+  PCMSK2 |= (1 << RECHTERMOTORPIN);
+  PCMSK2 |= (1 << GREIFARMPINA);
+  PCMSK2 |= (1 << GREIFARMPINB);
+  DDRD&=~PCMSK2;
+      Serial.begin(9600);
+      AFMS.begin();
     leftMotor->run(FORWARD);
     leftMotor->run(RELEASE);
     leftMotor->run(BACKWARD);
@@ -46,21 +50,40 @@ Serial.begin(9600);
 }
 
 void loop() {
-  uint16_t SpeedA;
-  //a super time-get-right loop which is fueled by pure magic
-  //pure magic means our prozessor has a sense of time which he will tell us with "millis"
-  //in this loop we get our n-1 readings (the first one always gets trashed) 
-  jetzt = millis();
   
+  jetzt = millis();
   if((jetzt - altZeitb) > deltaTacho){
     altZeitb = jetzt;    
-    SpeedA=counterA-altwertA;
-    altwertA=counterA;
-     #ifdef MOTOR
+    actualSpeedA=counterA-prevA;
+    newA=counterA;
+    }
+    
+   if((jetzt - altZeit) > deltaT){
+      altZeit = jetzt;
+//////////////////////////////////////////////////////////         
+         errorSpeedA = wantedSpeedA - actualSpeedA;
+     }
+        leftSpeed= errorSpeedA * kM 
+        
+    if (leftSpeed >= 255){
+    leftSpeed = 255;
+    }
+    if (rightSpeed >= 255){
+      rightSpeed = 255;
+    }
+    if (leftSpeed <= 0) {
+      leftSpeed = 0;
+    }
+    if (rightSpeed <= 0){
+      rightSpeed = 0;
+    }
+        
+        leftMotor->setSpeed();
+          
+  #ifdef MOTOR
   Serial.println(SpeedA);
-  
   #endif
-    }  
+  
 }
 
 ISR(PCINT2_vect){ //speciifc routine
