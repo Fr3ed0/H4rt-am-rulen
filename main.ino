@@ -14,7 +14,7 @@ Adafruit_DCMotor *rightMotor = AFMS.getMotor(2);
 
 //we will use the #define stuff. ask me about it! DEACTIVATE BEFORE THE RACE STARTS!
 //#define DEBUG // if active we are in the DEBUGGING mode, firing the Serial.println guns
-
+//#define ZEIT
 //#define SENSORADJUST // use this one FIRST:  *SensorAdjust to make all Sensors equal
 //#define MIDSENSOR // use midTarget to make midError = 0 if Sensor is placed on grey
 //#define LEFTSENSOR //
@@ -128,7 +128,7 @@ int8_t schrittTab[16] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0};
 //delta t time loop
 long jetzt = 0;
 long altZeit, altZeitb;
-int deltaT = 1; //we have to see if this is to high or to low
+int deltaT = 15; //we have to see if this is to high or to low
 
 void setup() {
 
@@ -186,9 +186,9 @@ uint16_t SpeedA;
 
   
   if((jetzt - altZeit) > deltaT){
-//   #ifdef DEBUG 
+   #ifdef ZEIT 
     Serial.println((jetzt - altZeit));
-//    #endif
+    #endif
     altZeit = jetzt;
       //TODO FIX OVERFLOW for jetzt
     //getting new values - since i dont know how to proper use an array it looks like that
