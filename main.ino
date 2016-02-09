@@ -86,8 +86,10 @@ int mr;
 #endif
 
 //motorPID
-int actualSpeedA; //our tacho
+int actualSpeedA;//our tacho
+int actualSpeedB;
 int wantedSpeedB;
+int errorSpeedB;
 int wantedSpeedA; //the value set by our pid sensor cycle
 int errorSpeedA; //the value used to adjust motor power
 
@@ -112,6 +114,8 @@ int altwert;
 int neuwert;
 uint16_t altwertA;
 uint16_t SpeedA;
+uint16_t altwertB;
+uint16_t SpeedB;
 const byte deltaTacho=100; // chose your value according to your prefered max range 
 
 //greifarm stuff
@@ -123,6 +127,7 @@ const float kM =1;
 const float kMI = 0.8;
 const float kMD = 0;
 float errorIntegral;
+float errorIntegralB;
 int aSA;
 int der;
 
@@ -174,9 +179,14 @@ void loop() {
 
 
       wantedSpeedA =map(analogRead(poti),0,1024,0,140);
+      wantedSpeedB = wantedSpeedA; //Insert proper pid regulated wanted speeds here
     altZeitb = jetzt;    
     actualSpeedA=(counterA-altwertA)*100/deltaTacho;
     altwertA=counterA;
+
+   altZeitb = jetzt;    
+    actualSpeedB=(counterB-altwertB)*100/deltaTacho;
+    altwertB=counterB;
 
 
     
@@ -185,11 +195,16 @@ void loop() {
       errorSpeedA = wantedSpeedA - actualSpeedA;
       errorIntegral += errorSpeedA;
 
+      errorSpeedB = wantedSpeedB - actualSpeedB;
+      errorIntegralB += errorSpeedB;
+
 
     der=errorSpeedA - aSA;
     aSA=errorSpeedA;
 
       leftPower = errorSpeedA * kM + errorIntegral * kMI + wantedSpeedA *2.5 + der*kMD; 
+      rightPower = errorSpeedB * kM + errorIntegralB * kMI + wantedSpeedA *2.5 + der*kMD;
+      
 //wantedSpeedA *2
          leftPower = powerOverflowProtection(leftPower);
          rightPower = powerOverflowProtection(rightPower);
@@ -251,7 +266,7 @@ int mr = (midSensorAvg - rightSensorAvg);
     
     //Adjusting the Motorspeeds to get the turn!(via i2c)
   //  leftMotor->setSpeed(leftSpeed);
-  //  rightMotor->setSpeed(rightSpeed);
+  //  ->setSpeed(rightSpeed);
 
 
 
@@ -279,7 +294,7 @@ int mr = (midSensorAvg - rightSensorAvg);
 inline void debugInfos(){
 
     #ifdef MOTOR
-    Serial.println(String(errorSpeedA) + "\t" + String(leftPower) + "\t" + String(actualSpeedA) + "\t" + String(errorIntegral) + "\t" + "\t" + String(wantedSpeedA) );
+    Serial.println(String(errorSpeedA) + "\t" + String(leftPower) + "\t" + String(actualSpeedA) + "\t" + String(errorIntegral) + "\t" + "\t" + String(wantedSpeedA) + "\t" + String(actualSpeedB) );
     #endif
   
     #ifdef DEBUG
@@ -357,11 +372,11 @@ ISR(PCINT2_vect){ //speciifc routine
     if (chgB & ((1 <<GREIFARMPINA) | (1 << GREIFARMPINB)) ){
         altAB <<= 2; 
         altAB &= B00001100;
-   //   altAB |= ((0b00000100 & newB) << 1) | (0b00001000 & newB); 
-   //   altAB |= (((1 << GREIFARMPINA) & newB) << 1) | ((1 << GREIFARMPINB) & newB);
-        altAB |= (digitalRead(GREIFARMPINA) << 1) | digitalRead(GREIFARMPINB); 
-        encoderWert += schrittTab[altAB];
-    }
 
+  altAB |= (((1 << GREIFARMPINA) & newB) >> (GREIFARMPINA-1)) | ((1 << GREIFARMPINB) & newB)>>GREIFARMPINB;
+  //    altAB |= (digitalRead(GREIFARMPINA) << 1) | digitalRead(GREIFARMPINB); 
+         
+        encoderWert -= schrittTab[altAB];
+    }
 }
   
