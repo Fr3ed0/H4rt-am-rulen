@@ -13,25 +13,28 @@ Adafruit_DCMotor *leftMotor = AFMS.getMotor(1);
 Adafruit_DCMotor *rightMotor = AFMS.getMotor(2);
 
 //we will use the #define stuff. ask me about it! DEACTIVATE BEFORE THE RACE STARTS!
+//#define GREIFARM
+//#define TACHO
+#define NEU
 //#define DEBUG // if active we are in the DEBUGGING mode, firing the Serial.println guns
 //#define ZEIT
 //#define SENSORADJUST // use this one FIRST:  *SensorAdjust to make all Sensors equal
 //#define MIDSENSOR // use midTarget to make midError = 0 if Sensor is placed on grey
 //#define LEFTSENSOR //
 //#define RIGHTSENSOR //
-#define MOTOR
+//#define MOTOR
 
 const byte probeCount = 5;
 
 int poti = A3; 
 
 //Sensor pins
-int leftIRPin = A1;
+int leftIRPin = A0;
 int rightIRPin = A2;
-int midIRPin = A0;
+int midIRPin = A1;
 
-// Initialize variables
-const float kP = 1.2;
+// Racedriver PID
+const float kP = 0.2;
 const float kI = 0.003;
 const float kD = 0.;
 int leftSensorAdjust = -14; //use those to calibrate sensors
@@ -39,14 +42,15 @@ int rightSensorAdjust = 0;
 int midSensorAdjust = 0;
 
 //TargetSpeed is the power the motors will get if we want the robot to drive straight.
-const byte leftTargetSpeed = 60; // we are using a byte here, because the motorshield
-const byte rightTargetSpeed = 60; // goes from 0-255.
+const byte leftTargetSpeed = 20; // we are using a byte here, because the motorshield
+const byte rightTargetSpeed = 20; // goes from 0-255.
+const byte lessBack = 2;
 
 //the target values for the sensors. if those are unchanged the robot will go straight
 //place sensors between black and weight and insert proper readings
-int leftTarget = 80;
-int rightTarget = 60;
-int midTarget = 580; //the darker the sourroundings the higer tis value should be
+int leftTarget = 680;
+int rightTarget = 680;
+int midTarget = 690; //the darker the sourroundings the higer tis value should be
 
 int leftSensorAvg;
 int rightSensorAvg;
@@ -59,6 +63,8 @@ int midSensor;
 int leftError;
 int rightError;
 int midError;
+
+int pidError;
 
 int turn;
 
@@ -83,39 +89,49 @@ int rightSpeed;
 #ifdef SENSORADJUST
 int ml;
 int mr; 
+int lr;
 #endif
 
 //motorPID
 int actualSpeedA;//our tacho
 int actualSpeedB;
 int wantedSpeedB;
+
+int wantedSpeedAoK;
+int wantedSpeedBoK;
+
 int errorSpeedB;
 int wantedSpeedA; //the value set by our pid sensor cycle
 int errorSpeedA; //the value used to adjust motor power
-
+int lgear;
+int rgear;
 
 //Interrupt motor adjust stuff
 
 volatile  uint8_t lastB = 0;   
-volatile  uint16_t counterA;
-volatile  uint16_t counterB;
+volatile  int16_t counterA;
+volatile  int16_t counterB;
 volatile int8_t altAB = 0;
+volatile int8_t altCD = 0;
 volatile long encoderWert = 0;
  
 
-#define LINKERMOTORPIN 2
-#define RECHTERMOTORPIN 3
+#define LINKERMOTORPINA 2
+#define LINKERMOTORPINB 3
 
-#define GREIFARMPINA 4
-#define GREIFARMPINB 5
+#define RECHTERMOTORPINA 4
+#define RECHTERMOTORPINB 5
+
+#define GREIFARMPINA 6
+#define GREIFARMPINB 7
 
 //tacho stuff
 int altwert;
 int neuwert;
-uint16_t altwertA;
-uint16_t SpeedA;
-uint16_t altwertB;
-uint16_t SpeedB;
+int altwertA;
+int SpeedA;
+int altwertB;
+int SpeedB;
 const byte deltaTacho=100; // chose your value according to your prefered max range 
 
 //greifarm stuff
@@ -141,8 +157,10 @@ void setup() {
 
   //Interrupt stuff
 PCICR |= (1 << PCIE2); //arduino will react on interrupts on port D
-PCMSK2 |= (1 << LINKERMOTORPIN); // 2 defines the pin which listens for motor encoder (must be on portD)
-PCMSK2 |= (1 << RECHTERMOTORPIN); // for the second motor ** 00001100
+PCMSK2 |= (1 << LINKERMOTORPINA);
+PCMSK2 |= (1 << LINKERMOTORPINB); // 2 defines the pin which listens for motor encoder (must be on portD)
+PCMSK2 |= (1 << RECHTERMOTORPINA);
+PCMSK2 |= (1 << RECHTERMOTORPINB);// for the second motor ** 00001100
 PCMSK2 |= (1 << GREIFARMPINA);
 PCMSK2 |= (1 << GREIFARMPINB);
 DDRD&=~PCMSK2; //if DDRD is 0 on the specific bit = input
@@ -159,8 +177,9 @@ PORTD |= PCMSK2; //arduino intern pullup resistor
       leftMotor->run(FORWARD);
       rightMotor->run(FORWARD);
  //     leftMotor->run(RELEASE);
-//  leftMotor->run(BACKWARD);
-    //  rightMotor->run(BACKWARD);
+ //     rightMotor->run(RELEASE);
+ //    leftMotor->run(BACKWARD);
+ //   rightMotor->run(BACKWARD);
      integral = 0 ;
      errorIntegral = 0;
   //TODO make tests for all them hardware!
@@ -178,13 +197,13 @@ void loop() {
   if((jetzt - altZeitb) > deltaTacho){
 
 
-      wantedSpeedA =map(analogRead(poti),0,1024,0,140);
-      wantedSpeedB = wantedSpeedA; //Insert proper pid regulated wanted speeds here
+//      wantedSpeedA =map(analogRead(poti),0,1024,0,140);
+//      wantedSpeedB = wantedSpeedA; //Insert proper pid regulated wanted speeds here
     altZeitb = jetzt;    
     actualSpeedA=(counterA-altwertA)*100/deltaTacho;
     altwertA=counterA;
 
-   altZeitb = jetzt;    
+
     actualSpeedB=(counterB-altwertB)*100/deltaTacho;
     altwertB=counterB;
 
@@ -192,25 +211,26 @@ void loop() {
     
 
       //tempomat
-      errorSpeedA = wantedSpeedA - actualSpeedA;
+      errorSpeedA = wantedSpeedA - abs(actualSpeedA);
       errorIntegral += errorSpeedA;
 
-      errorSpeedB = wantedSpeedB - actualSpeedB;
+      errorSpeedB = wantedSpeedB - abs(actualSpeedB);
       errorIntegralB += errorSpeedB;
 
 
     der=errorSpeedA - aSA;
     aSA=errorSpeedA;
 
-      leftPower = errorSpeedA * kM + errorIntegral * kMI + wantedSpeedA *2.5 + der*kMD; 
-      rightPower = errorSpeedB * kM + errorIntegralB * kMI + wantedSpeedA *2.5 + der*kMD;
+
+      leftPower = errorSpeedA * kM + errorIntegral * kMI + wantedSpeedAoK *2.5 + der*kMD; 
+      rightPower = errorSpeedB * kM + errorIntegralB * kMI + wantedSpeedBoK *2.5 + der*kMD;
       
-//wantedSpeedA *2
-         leftPower = powerOverflowProtection(leftPower);
-         rightPower = powerOverflowProtection(rightPower);
-         
-    leftMotor->setSpeed(leftPower);
-    rightMotor->setSpeed(rightPower);
+
+         leftSpeed = leftPowerControl(leftPower);
+         rightSpeed = rightPowerControl(rightPower);
+       
+    leftMotor->setSpeed(leftSpeed); 
+    rightMotor->setSpeed(rightSpeed);
 
 
  
@@ -231,8 +251,8 @@ void loop() {
     
     //IntegralStuff
     //FIXME: maybe +-10 isnt big enough
-    integral = integral + midError;
-    if(midError<=10 && midError>=-10){
+    integral = integral + pidError;
+    if(pidError<=10 && pidError>=-10){
       integral = 0;
     }
       
@@ -240,24 +260,20 @@ void loop() {
     //adding the nessesary things for the derivative -Whoppa FlipFlop Style
     flip++;
     if((flip % 2) == 0){
-      aPrevError = midError;
-      derivative = midError - bPrevError;
+      aPrevError = pidError;
+      derivative = pidError - bPrevError;
       } else {
-      bPrevError = midError ;
-      derivative = midError - aPrevError;
+      bPrevError = pidError ;
+      derivative = pidError - aPrevError;
         }
-      
-#ifdef SENSORADJUST
-int ml = (midSensorAvg - leftSensorAvg);
-int mr = (midSensorAvg - rightSensorAvg); 
-#endif 
       
     //Heres how we adjust the motorspeeds!
     //from now on on we totally ignore our secondary sensor
-    turn = midError * kP + kI * integral + kD * derivative;
+    pidError = leftError - rightError;
+    turn = pidError * kP + kI * integral + kD * derivative;
 
-//    wantedSpeedA = leftTargetSpeed + turn;
-//    wantedSpeedB = rightTargetSpeed - turn;
+    wantedSpeedA = leftTargetSpeed + turn;
+    wantedSpeedB = rightTargetSpeed - turn;
 //      rightPower = leftTargetSpeed + turn;
 //      leftPower = rightTargetSpeed - turn;
 
@@ -275,35 +291,81 @@ int mr = (midSensorAvg - rightSensorAvg);
       
     } //end of the timed loop
 
+
+    
+    if(wantedSpeedA <= 0){
+      leftMotor->run(BACKWARD);
+      lgear = -1;
+      wantedSpeedAoK = -1 * wantedSpeedA;
+    }else {
+      leftMotor->run(FORWARD);
+      wantedSpeedAoK = wantedSpeedA;
+      lgear = 1;
+    }
+    
+    if(wantedSpeedB <= 0){
+      rightMotor->run(BACKWARD);
+      rgear = -1;
+      wantedSpeedBoK = -1* wantedSpeedB;
+    }else {
+      rightMotor->run(FORWARD);
+      wantedSpeedBoK = wantedSpeedB;
+      rgear = 1;
+    }
     
   
     
       
   }// end of the void loop
 
-      byte powerOverflowProtection(int x){
-        if (x >= 255){
+
+
+    byte leftPowerControl(int x){
+          if (x >= 255){
           return 255;
-          } else if(x <=0) {
+          }
+          if (x <= 0){
             return 0;
-            }  else {
+          }
+              else {
               return byte(x);
             }
+          }
+    byte rightPowerControl(int y){
+          if (y >= 255){
+          return 255;
+          }
+          if (y <= 0){
+            return 0;
+          }
+              else {
+              return byte(y);
+            }
+          }
         
-      }
 inline void debugInfos(){
+    #ifdef GREIFARM
+    Serial.println(String(actualSpeedB));
+    #endif
+  
+    #ifdef TACHO
+    Serial.println(String(actualSpeedA) + "\t" + String(actualSpeedB));
+    #endif
+    
+    #ifdef NEU
+    Serial.println(String(wantedSpeedA) + "\t" + String(wantedSpeedAoK) + "\t" + String(lgear) + "\t" + String(wantedSpeedB) + "\t" + String(wantedSpeedBoK) + "\t" + String(rgear));
+    #endif
 
     #ifdef MOTOR
     Serial.println(String(errorSpeedA) + "\t" + String(leftPower) + "\t" + String(actualSpeedA) + "\t" + String(errorIntegral) + "\t" + "\t" + String(wantedSpeedA) + "\t" + String(actualSpeedB) );
     #endif
   
     #ifdef DEBUG
-    Serial.println(String(midError) + "\t " + String(integral) + "\t" + String(derivative) + "\t" + String(turn) + "\t" + String(leftSpeed) + "\t" + String(rightSpeed));
+    Serial.println(String(pidError) + "\t " + String(integral) + "\t" + String(derivative) + "\t" + String(turn) + "\t" + String(wantedSpeedA) + "\t" + String(wantedSpeedB));
     #endif
 
     #ifdef SENSORADJUST
-    Serial.println(String("Mavg: ") + String(midSensorAvg) + String("Lavg: ") + String(leftSensorAvg) + String("Ravg: ") + String(rightSensorAvg) +
-    String("ML = 0?: ") + String(ml) + String("MR = 0?: ") + String(mr));
+    Serial.println(String("Lavg: ") + String(leftSensorAvg) + String(" on grey? 0=>?: ") + String(leftError) + String("Ravg: ") + String(rightSensorAvg) + String(" on grey? 0=>?: ") + String(rightError) + "\t" + String(pidError));
     #endif
 
     #ifdef MIDSENSOR
@@ -319,6 +381,7 @@ inline void debugInfos(){
     #ifdef RIGHTSENSOR
     Serial.println(String("Ravg: ") + String(rightSensorAvg) + String(" on grey? 0=>?: ") + String(rightError));
     #endif
+     
   
 }
 
@@ -362,13 +425,31 @@ ISR(PCINT2_vect){ //speciifc routine
   uint8_t chgB = newB ^ lastB;          // geänderte Bits zum letzten Port
   lastB = newB;                         // neuer Port wird zum alten für die nächste Runde
 
+if (chgB & ((1 <<LINKERMOTORPINA) | (1 << LINKERMOTORPINB)) ){
+        altCD <<= 2; 
+        altCD &= B00001100;
+
+  altCD |= (((1 << LINKERMOTORPINA) & newB) >> (LINKERMOTORPINA-1)) | ((1 << LINKERMOTORPINB) & newB)>>LINKERMOTORPINB;
+//        altCD |= (digitalRead(LINKERMOTORPINA) << 1) | digitalRead(LINKERMOTORPINB); 
+        counterA -= schrittTab[altCD];
+    }
+
+if (chgB & ((1 <<RECHTERMOTORPINA) | (1 << RECHTERMOTORPINB)) ){
+        altAB <<= 2; 
+        altAB &= B00001100;
+
+  altAB |= (((1 << RECHTERMOTORPINA) & newB) >> (RECHTERMOTORPINA-1)) | ((1 << RECHTERMOTORPINB) & newB)>>RECHTERMOTORPINB;
+         
+        counterB -= schrittTab[altAB];
+    }
+
     
-    if (chgB & (1 << LINKERMOTORPIN)) {
-     counterA++;
-    }
-     if (chgB & (1 << RECHTERMOTORPIN)) {
-     counterB++;
-    }
+//    if (chgB & (1 << LINKERMOTORPIN)) {
+//     counterA++;
+//    }
+//     if (chgB & (1 << RECHTERMOTORPIN)) {
+//     counterB++;
+//    }
     if (chgB & ((1 <<GREIFARMPINA) | (1 << GREIFARMPINB)) ){
         altAB <<= 2; 
         altAB &= B00001100;
