@@ -174,8 +174,8 @@ PORTD |= PCMSK2; //arduino intern pullup resistor
   
     //We are reading both values and trash them. the first readings are just that.
     // Set motor direction
-      leftMotor->run(FORWARD);
-      rightMotor->run(FORWARD);
+ //     leftMotor->run(FORWARD);
+ //     rightMotor->run(FORWARD);
  //     leftMotor->run(RELEASE);
  //     rightMotor->run(RELEASE);
  //    leftMotor->run(BACKWARD);
@@ -297,7 +297,7 @@ void loop() {
       leftMotor->run(BACKWARD);
       lgear = -1;
       wantedSpeedAoK = -1 * wantedSpeedA;
-    }else {
+    }if(wantedSpeedA > 0) {
       leftMotor->run(FORWARD);
       wantedSpeedAoK = wantedSpeedA;
       lgear = 1;
@@ -307,7 +307,7 @@ void loop() {
       rightMotor->run(BACKWARD);
       rgear = -1;
       wantedSpeedBoK = -1* wantedSpeedB;
-    }else {
+    }if(wantedSpeedB > 0) {
       rightMotor->run(FORWARD);
       wantedSpeedBoK = wantedSpeedB;
       rgear = 1;
