@@ -15,7 +15,7 @@ Adafruit_DCMotor *rightMotor = AFMS.getMotor(2);
 //we will use the #define stuff. ask me about it! DEACTIVATE BEFORE THE RACE STARTS!
 //#define GREIFARM
 //#define TACHO
-///#define NEU
+//#define NEU
 //#define DEBUG // if active we are in the DEBUGGING mode, firing the Serial.println guns
 //#define ZEIT
 //#define SENSORADJUST // use this one FIRST:  *SensorAdjust to make all Sensors equal
@@ -34,8 +34,10 @@ int rightIRPin = A2;
 int midIRPin = A1;
 
 // Racedriver PID
-const float kP = 0.2;
-const float kI = 0.003;
+//const float kP = 0.2;
+//const float kI = 0.003;
+const float kP = 0.5;
+const float kI = 0.03;
 const float kD = 0.;
 int leftSensorAdjust = 20; //use those to calibrate sensors
 int rightSensorAdjust = 0;
@@ -95,6 +97,17 @@ int errorSpeedA; //the value used to adjust motor power
 int lgear;
 int rgear;
 
+
+//interrupt for taster ect
+volatile bool enabler = true;
+volatile bool keypressed = false;
+volatile unsigned long bloedeZeit=0;
+const int entprellZeit=1000;
+
+bool isDriving;
+
+#define ANAUSKNOPF 0
+
 //Interrupt motor adjust stuff
 
 volatile  uint8_t lastB = 0;   
@@ -102,8 +115,7 @@ volatile  int16_t counterA;
 volatile  int16_t counterB;
 volatile int8_t altAB = 0;
 volatile int8_t altCD = 0;
-volatile long encoderWert = 0;
- 
+volatile long encoderWert = 0; 
 
 #define LINKERMOTORPINA 2
 #define LINKERMOTORPINB 3
@@ -145,6 +157,10 @@ const byte deltaT = 15; //we have to see if this is to high or to low
 void setup() {
 
   //Interrupt stuff
+PCICR |= (1 << PCIE0); // interrupts on port B (Pin 8 still 13, (goes intern from 0 to 7))
+PCMSK0 |= (1 << ANAUSKNOPF);
+DDRB&=~PCMSK0; //if DDRD is 0 on the specific bit = input
+PORTB |= PCMSK0; //arduino intern pullup resistor
 
 PCICR |= (1 << PCIE2); //arduino will react on interrupts on port D
 PCMSK2 |= (1 << LINKERMOTORPINA);
@@ -158,22 +174,20 @@ PORTD |= PCMSK2; //arduino intern pullup resistor
 
 
   
-  Serial.begin(9600);           // set up Serial baud to 115200 bps
+ Serial.begin(9600);           // set up Serial baud to 115200 bps
   AFMS.begin();  // start motorshield with the default frequency 1.6KHz
   //AFMS.begin(1000);  // OR with a different frequency, say 1KHz
   
     //We are reading both values and trash them. the first readings are just that.
     // Set motor direction
-  
-      leftMotor->run(FORWARD);
-      rightMotor->run(FORWARD);
-   
+  rightMotor->run(FORWARD);
+   leftMotor->run(FORWARD);
  //     leftMotor->run(RELEASE);
  //     rightMotor->run(RELEASE);
  //    leftMotor->run(BACKWARD);
  //   rightMotor->run(BACKWARD);
-     integral = 0 ;
-     errorIntegral = 0;
+  //   integral = 0 ;
+  //   errorIntegral = 0;
   //TODO make tests for all them hardware!
 //    Serial.println("Adafruit Motorshield v2 - ready!");
 //    Serial.println("All Systems GO!");
@@ -183,6 +197,21 @@ interrupts();
 
 
 void loop() {
+    if (keypressed){
+      isDriving = !isDriving;
+      Serial.println(String(enabler) + "\t" + String(keypressed) + "\t" + String(isDriving));
+     
+    
+      keypressed = false;
+      integral = 0;
+      errorIntegral = 0;
+      errorIntegralB = 0;
+        enabler = true;
+        delay(50);
+      
+    }
+ //   Serial.println(String(enabler) + "\t" + String(keypressed) + "\t" + String(isDriving));
+
    jetzt = millis();
   
   if((jetzt - altZeitb) > deltaTacho){
@@ -204,14 +233,13 @@ void loop() {
       //tempomat
       errorSpeedA = targetSpeed - actualSpeedA;
       errorIntegral += errorSpeedA;
-
+      errorIntegral=min(errorIntegral,8000);
       errorSpeedB = targetSpeed - actualSpeedB;
       errorIntegralB += errorSpeedB;
-
+      errorIntegralB=min(errorIntegralB,8000);
 
     der=errorSpeedA - aSA;
     aSA=errorSpeedA;
-
 
       leftPower = errorSpeedA * kM + errorIntegral * kMI + targetSpeed *2.5 + der*kMD; 
       rightPower = errorSpeedB * kM + errorIntegralB * kMI + targetSpeed *2.5 + der*kMD;
@@ -235,7 +263,7 @@ void loop() {
     //FIXME: maybe +-10 isnt big enough
     integral = integral + pidError;
     if(pidError<=10 && pidError>=-10){
-      integral = 0;
+     // integral = 0;
     }
       
     //derivate stuff
@@ -254,7 +282,7 @@ void loop() {
     pidError = rightSensor - leftSensor;
     turn = pidError * kP + kI * integral + kD * derivative;
 
-     motorController(leftPower + turn, rightPower - turn);
+     motorController(leftPower/10 + 2*turn, rightPower/10 - 2*turn);
     
       debugInfos();
 
@@ -272,19 +300,21 @@ void loop() {
    byte left;
    byte right;
 
+    if(isDriving){
    //left Motor gear select
    if (leftControl < 0){
     if(leftFORWARD){
       leftFORWARD = false;
       leftMotor->run(BACKWARD);
+  
     }
    }else{
-     Serial.println(leftControl);
+    
    
     if(!leftFORWARD){
       leftFORWARD = true;
       leftMotor->run(FORWARD);
-     
+  
     }
   
    }
@@ -294,21 +324,30 @@ void loop() {
     if(rightFORWARD){
       rightFORWARD = false;
       rightMotor->run(BACKWARD);
+  
     }
    }else{
     if(!rightFORWARD){
       rightFORWARD = true;
       rightMotor->run(FORWARD);
+   
     }
    }
  
    //overflowprotection
     left = min(255,abs(leftControl));
     right = min(255, abs(rightControl));
-    Serial.println(left);
-       leftMotor->run(left);
-       rightMotor->run(right);
-      
+       leftMotor->setSpeed(left);
+       rightMotor->setSpeed(right);
+      //   leftMotor->setSpeed(0);
+      //   rightMotor->setSpeed(0);
+    }else{
+      leftMotor->run(RELEASE);
+      rightMotor->run(RELEASE);
+      leftFORWARD = false;
+      rightFORWARD = false;
+      }
+    
   }
 
         
@@ -324,7 +363,7 @@ inline void debugInfos(){
     #endif
     
     #ifdef NEU
-    Serial.println(String(wantedSpeedA) + "\t" + String(wantedSpeedAoK) + "\t" + String(lgear) + "\t" + String(wantedSpeedB) + "\t" + String(wantedSpeedBoK) + "\t" + String(rgear));
+    Serial.println(String(leftPower) + "\t" + String(rightPower) + "\t" + String(turn) + "\t" + String(targetSpeed));
     #endif
 
     #ifdef MOTOR
@@ -372,7 +411,23 @@ inline void sensorAbfrage(){
  }
 
 
-ISR(PCINT2_vect){ //speciifc routine
+
+ISR(PCINT0_vect){ //speciifc routine for "an aus knopf"
+  
+ if((millis() - bloedeZeit) > entprellZeit)
+ 
+  if ((PINB & (1 << ANAUSKNOPF)) == 0){
+    
+    if (enabler){
+      keypressed = true;
+      enabler = false;
+    }
+   }
+      bloedeZeit = millis();
+  }
+ 
+
+ISR(PCINT2_vect){ //speciifc routine for ENCODER
  
   uint8_t newB = PIND;                  // aktuellen Port speichern
   uint8_t chgB = newB ^ lastB;          // geänderte Bits zum letzten Port
@@ -416,4 +471,3 @@ if (chgB & ((1 <<RECHTERMOTORPINA) | (1 << RECHTERMOTORPINB)) ){
     }
    
 }
-  
