@@ -24,7 +24,34 @@ Adafruit_DCMotor *rightMotor = AFMS.getMotor(2);
 //#define RIGHTSENSOR //
 //#define MOTOR
 
+// Racedriver PID
+const float kP = 0.6;
+const float kI = 0.1;
+//const float kP = 0.05;
+//const float kI = 0.01;
+const float kD = 1;
+
+
+//Motor - PI  do not change
+const float kM =1;
+const float kMI = 0.5;
+const float kMD = 0;
+
+//TargetSpeed is the power the motors will get if we want the robot to drive straight.
+byte targetSpeed;
+const float breakvalue = 1.5;
+float breaks;
+float breaktest;
+
+int leftSensorAdjust = 5; //use those to calibrate sensors
+int rightSensorAdjust = 45;
+
+
 const byte probeCount = 5;
+
+//int yolo = rightPower - turn - breaktest;
+//int tolo = leftPower - turn - breaktest;
+
 
 int poti = A3; 
 
@@ -33,19 +60,9 @@ int leftIRPin = A0;
 int rightIRPin = A2;
 int midIRPin = A1;
 
-// Racedriver PID
-//const float kP = 0.2;
-//const float kI = 0.003;
-const float kP = 0.5;
-const float kI = 0.03;
-const float kD = 0.;
-int leftSensorAdjust = 20; //use those to calibrate sensors
-int rightSensorAdjust = 0;
+
 int midSensorAdjust = 0;
 
-//TargetSpeed is the power the motors will get if we want the robot to drive straight.
-//
-byte targetSpeed = 5;
 
 int leftSensor;
 int rightSensor;
@@ -63,6 +80,8 @@ long integral;
 
 int rightPower;
 int leftPower;
+
+
 
 //derivative stuff
 int derivative;
@@ -140,9 +159,7 @@ int8_t schrittTab[16] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0};
 
 //motorregelung
 
-const float kM =1;
-const float kMI = 0.8;
-const float kMD = 0;
+
 float errorIntegral;
 float errorIntegralB;
 int aSA;
@@ -199,7 +216,7 @@ interrupts();
 void loop() {
     if (keypressed){
       isDriving = !isDriving;
-      Serial.println(String(enabler) + "\t" + String(keypressed) + "\t" + String(isDriving));
+ //     Serial.println(String(enabler) + "\t" + String(keypressed) + "\t" + String(isDriving));
      
     
       keypressed = false;
@@ -241,9 +258,8 @@ void loop() {
     der=errorSpeedA - aSA;
     aSA=errorSpeedA;
 
-      leftPower = errorSpeedA * kM + errorIntegral * kMI + targetSpeed *2.5 + der*kMD; 
-      rightPower = errorSpeedB * kM + errorIntegralB * kMI + targetSpeed *2.5 + der*kMD;
-      
+      leftPower = (errorSpeedA * kM + errorIntegral * kMI + targetSpeed *2.5 + der*kMD); 
+      rightPower = (errorSpeedB * kM + errorIntegralB * kMI + targetSpeed *2.5 + der*kMD);
   }  
 
   
@@ -279,10 +295,19 @@ void loop() {
       
     //Heres how we adjust the motorspeeds!
     //from now on on we totally ignore our secondary sensor
-    pidError = rightSensor - leftSensor;
-    turn = pidError * kP + kI * integral + kD * derivative;
 
-     motorController(leftPower/10 + 2*turn, rightPower/10 - 2*turn);
+    breaktest = targetSpeed - abs(breaks);
+    pidError = rightSensor - leftSensor;
+    
+    turn = pidError * kP + kI * integral + kD * derivative;
+    breaks = abs(pidError) * breakvalue;
+    
+//  int yolo = (leftPower + turn - breaktest);
+//  int tolo = (rightPower - turn - breaktest);
+
+    
+//we can adjust those values, too like leftpower/10 turn*2 ect we will add the breaks here, too
+     motorController((leftPower + turn - breaktest), (rightPower - turn - breaktest));
     
       debugInfos();
 
@@ -330,6 +355,9 @@ void loop() {
     if(!rightFORWARD){
       rightFORWARD = true;
       rightMotor->run(FORWARD);
+
+      
+
    
     }
    }
@@ -339,21 +367,22 @@ void loop() {
     right = min(255, abs(rightControl));
        leftMotor->setSpeed(left);
        rightMotor->setSpeed(right);
-      //   leftMotor->setSpeed(0);
-      //   rightMotor->setSpeed(0);
     }else{
       leftMotor->run(RELEASE);
       rightMotor->run(RELEASE);
       leftFORWARD = false;
       rightFORWARD = false;
       }
+ //   Serial.println("\t" + String(yolo) + "\t" + String(tolo)+ "\t"))
+             Serial.println(String(pidError) +"\t" + String(breaks) + "\t" + String(left) + + "\t" + String(right));
+  
     
   }
 
         
 inline void debugInfos(){
 
-  
+
     #ifdef GREIFARM
     Serial.println(String(actualSpeedB));
     #endif
@@ -371,7 +400,7 @@ inline void debugInfos(){
     #endif
   
     #ifdef DEBUG
-    Serial.println(String(pidError) + "\t " + String(integral) + "\t" + String(leftPower) + "\t" + String(targetSpeed) + "\t" + String(turn));
+    Serial.println(String(pidError) + "\t " + String(integral) + "\t" + String(leftPower) +  "\t" + String(rightPower) + "\t" + String(derivative) + "\t" + String(turn));
     #endif
 
     #ifdef SENSORADJUST
