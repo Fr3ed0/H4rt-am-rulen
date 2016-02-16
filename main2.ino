@@ -19,7 +19,7 @@ Adafruit_DCMotor *grappleMotor = AFMS.getMotor(4);
 //#define NEU
 //#define DEBUG // if active we are in the DEBUGGING mode, firing the Serial.println guns
 //#define ZEIT
-#define SENSORADJUST // use this one FIRST:  *SensorAdjust to make all Sensors equal
+//#define SENSORADJUST // use this one FIRST:  *SensorAdjust to make all Sensors equal
 //#define MIDSENSOR // use midTarget to make midError = 0 if Sensor is placed on grey
 //#define LEFTSENSOR //
 //#define RIGHTSENSOR //
@@ -165,6 +165,8 @@ int SpeedA;
 int altwertB;
 int SpeedB;
 const byte deltaTacho=100; // chose your value according to your prefered max range 
+int wantedSpeedA;
+int wantedSpeedB;
 
 //greifarm stuff
 int8_t schrittTab[16] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0}; 
@@ -298,19 +300,24 @@ void loop() {
      //pidError is just the difference between the sensor readings
     pidError = rightSensor - leftSensor;
 
-    // the turn value is calculated by the hole pid stuff
+  
+    //turn is the only varriable changed by the pid regelung which is relevant
     turn = pidError * kP + kI * integral + kD * derivative;
-    
-    //we can adjust those values, too like leftpower/10 turn*2 ect we will add the breaks here, too
 
+
+      // wanted Speed is the speed, which combines our constant "targetSpeed" and the "turn" value
+      // it can be negative and positive
+      // it must be adjustet with the PI-Motor-Regelung and is at the verry end a byte (0-255 only positive)
+    wantedSpeedA = targetSpeed + turn;
+    wantedSpeedB = targetSpeed - turn;
+    
     
       //hier wird der fehler für den tempomat bestimmt.  
-      //FIXME aktuelle geschwindigkeit - sollgeschwindigkeit wäre hier ideal
       
-      errorSpeedA = targetSpeed - actualSpeedA;
+      errorSpeedA =wantedSpeedA - actualSpeedA;
       errorIntegral += errorSpeedA;
       errorIntegral=min(errorIntegral,8000);
-      errorSpeedB = targetSpeed - actualSpeedB;
+      errorSpeedB =wantedSpeedB - actualSpeedB;
       errorIntegralB += errorSpeedB;
       errorIntegralB=min(errorIntegralB,8000);
 
@@ -325,7 +332,7 @@ void loop() {
   
    //  motorController((leftPower + turn - breaktest), (rightPower - turn - breaktest));
    
-   motorController((leftPower + turn), (rightPower - turn));
+   motorController((leftPower), (rightPower));
       debugInfos();
 
       
@@ -352,12 +359,10 @@ void loop() {
       leftMotor->run(BACKWARD);
     }
    }else{
-    
    
     if(!leftFORWARD){
       leftFORWARD = true;
       leftMotor->run(FORWARD);
-  
     }
   
    }
@@ -367,7 +372,6 @@ void loop() {
     if(rightFORWARD){
       rightFORWARD = false;
       rightMotor->run(BACKWARD);
-  
     }
    }else{
     if(!rightFORWARD){
@@ -387,19 +391,20 @@ void loop() {
       leftFORWARD = false;
       rightFORWARD = false;
       }
-  }
+        Serial.println(String(errorSpeedA)+ "\t" + String(left) + "\t" + String(errorSpeedB) + "\t" + String(right));
+      }
 
         
 inline void debugInfos(){
 
-Serial.println(counterB);
+//Serial.println(counterB);
 
     #ifdef GREIFARM
     Serial.println(String(actualSpeedB));
     #endif
   
     #ifdef TACHO
-    Serial.println(String(actualSpeedA) + "\t" + String(actualSpeedB));
+    Serial.println(String(errorSpeedA) + "\t" + String(errorSpeedB));
     #endif
     
     #ifdef NEU
@@ -417,13 +422,11 @@ Serial.println(counterB);
     #ifdef SENSORADJUST
     Serial.println( String(leftSensor) + "\t" + String(rightSensor) + "\t" + String(pidError));
     #endif
-
     
     #ifdef RIGHTSENSOR
     Serial.println(String("Ravg: ") + String(rightSensorAvg) + String(" on grey? 0=>?: ") + String(rightError));
     #endif
      
-  
 }
 
 
