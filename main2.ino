@@ -11,6 +11,7 @@ Adafruit_MotorShield AFMS = Adafruit_MotorShield();
 // Select which 'port' M1, M2, M3 or M4 the motors go.
 Adafruit_DCMotor *leftMotor = AFMS.getMotor(1);
 Adafruit_DCMotor *rightMotor = AFMS.getMotor(2);
+Adafruit_DCMotor *grappleMotor = AFMS.getMotor(4);
 
 //we will use the #define stuff. ask me about it! DEACTIVATE BEFORE THE RACE STARTS!
 //#define GREIFARM
@@ -39,7 +40,7 @@ const float kMD = 0;
 
 //TargetSpeed is the power the motors will get if we want the robot to drive straight.
 byte targetSpeed;
-const float breakvalue = 1.5;
+const float breakValue = 0.8;
 float breaks;
 float breaktest;
 
@@ -49,8 +50,8 @@ int rightSensorAdjust = 45;
 
 const byte probeCount = 5;
 
-//int yolo = rightPower - turn - breaktest;
-//int tolo = leftPower - turn - breaktest;
+int haha;
+int hoho;
 
 
 int poti = A3; 
@@ -105,13 +106,15 @@ int lr;
 //motorPID
 int actualSpeedA;//our tacho
 int actualSpeedB;
+/*
+int wantedSpeedA; //the value set by our pid sensor cycle
 int wantedSpeedB;
 
 int wantedSpeedAoK;
 int wantedSpeedBoK;
-
+*/
 int errorSpeedB;
-int wantedSpeedA; //the value set by our pid sensor cycle
+
 int errorSpeedA; //the value used to adjust motor power
 int lgear;
 int rgear;
@@ -120,12 +123,19 @@ int rgear;
 //interrupt for taster ect
 volatile bool enabler = true;
 volatile bool keypressed = false;
+
+volatile bool active = true;
+volatile bool grappleKeypressed = false;
 volatile unsigned long bloedeZeit=0;
 const int entprellZeit=1000;
 
 bool isDriving;
 
 #define ANAUSKNOPF 0
+
+#define GRAPPLEKNOPF 5
+
+int grappleTest = 0;
 
 //Interrupt motor adjust stuff
 
@@ -134,6 +144,7 @@ volatile  int16_t counterA;
 volatile  int16_t counterB;
 volatile int8_t altAB = 0;
 volatile int8_t altCD = 0;
+volatile int8_t altEF = 0;
 volatile long encoderWert = 0; 
 
 #define LINKERMOTORPINA 2
@@ -142,8 +153,8 @@ volatile long encoderWert = 0;
 #define RECHTERMOTORPINA 4
 #define RECHTERMOTORPINB 5
 
-#define GREIFARMPINA 6
-#define GREIFARMPINB 7
+//#define GREIFARMPINA 6
+//#define GREIFARMPINB 7
 
 //tacho stuff
 int altwert;
@@ -176,6 +187,7 @@ void setup() {
   //Interrupt stuff
 PCICR |= (1 << PCIE0); // interrupts on port B (Pin 8 still 13, (goes intern from 0 to 7))
 PCMSK0 |= (1 << ANAUSKNOPF);
+PCMSK0 |= (1 << GRAPPLEKNOPF);
 DDRB&=~PCMSK0; //if DDRD is 0 on the specific bit = input
 PORTB |= PCMSK0; //arduino intern pullup resistor
 
@@ -184,8 +196,8 @@ PCMSK2 |= (1 << LINKERMOTORPINA);
 PCMSK2 |= (1 << LINKERMOTORPINB); // 2 defines the pin which listens for motor encoder (must be on portD)
 PCMSK2 |= (1 << RECHTERMOTORPINA);
 PCMSK2 |= (1 << RECHTERMOTORPINB);// for the second motor ** 00001100
-PCMSK2 |= (1 << GREIFARMPINA);
-PCMSK2 |= (1 << GREIFARMPINB);
+//PCMSK2 |= (1 << GREIFARMPINA);
+//PCMSK2 |= (1 << GREIFARMPINB);
 DDRD&=~PCMSK2; //if DDRD is 0 on the specific bit = input
 PORTD |= PCMSK2; //arduino intern pullup resistor
 
@@ -214,37 +226,42 @@ interrupts();
 
 
 void loop() {
+
+  //An aus knopf 
     if (keypressed){
       isDriving = !isDriving;
- //     Serial.println(String(enabler) + "\t" + String(keypressed) + "\t" + String(isDriving));
-     
-    
       keypressed = false;
       integral = 0;
       errorIntegral = 0;
       errorIntegralB = 0;
         enabler = true;
         delay(50);
-      
     }
- //   Serial.println(String(enabler) + "\t" + String(keypressed) + "\t" + String(isDriving));
+
+
+   //180grad dreh knopf
+    if (grappleKeypressed){
+      grappleKeypressed = false;
+      active = true;
+      grappleTest ++;
+      Serial.println(grappleTest);
+      
+      delay(50);
+    }
+
 
    jetzt = millis();
-  
+  //tacho realzeit loop
   if((jetzt - altZeitb) > deltaTacho){
-
-
+    
       targetSpeed =map(analogRead(poti),0,1024,0,140);
 //      wantedSpeedB = wantedSpeedA; //Insert proper pid regulated wanted speeds here
     altZeitb = jetzt;    
     actualSpeedA=(counterA-altwertA)*100.0/deltaTacho;
     altwertA=counterA;
 
-
     actualSpeedB=(counterB-altwertB)*100.0/deltaTacho;
     altwertB=counterB;
-
-
     
 
       //tempomat
@@ -258,6 +275,7 @@ void loop() {
     der=errorSpeedA - aSA;
     aSA=errorSpeedA;
 
+  //left und right power ist also der output des tempomats ( noch kein byte für die motorregelung)
       leftPower = (errorSpeedA * kM + errorIntegral * kMI + targetSpeed *2.5 + der*kMD); 
       rightPower = (errorSpeedB * kM + errorIntegralB * kMI + targetSpeed *2.5 + der*kMD);
   }  
@@ -275,7 +293,7 @@ void loop() {
    
     sensorAbfrage();
     
-    //IntegralStuff
+    //IntegralStuff DEACTIVATED
     //FIXME: maybe +-10 isnt big enough
     integral = integral + pidError;
     if(pidError<=10 && pidError>=-10){
@@ -295,19 +313,18 @@ void loop() {
       
     //Heres how we adjust the motorspeeds!
     //from now on on we totally ignore our secondary sensor
-
-    breaktest = targetSpeed - abs(breaks);
     pidError = rightSensor - leftSensor;
     
     turn = pidError * kP + kI * integral + kD * derivative;
-    breaks = abs(pidError) * breakvalue;
     
-//  int yolo = (leftPower + turn - breaktest);
-//  int tolo = (rightPower - turn - breaktest);
-
+    breaks = abs(pidError) * breakValue;
+    breaktest = abs(breaks);
     
 //we can adjust those values, too like leftpower/10 turn*2 ect we will add the breaks here, too
-     motorController((leftPower + turn - breaktest), (rightPower - turn - breaktest));
+
+  
+   //  motorController((leftPower + turn - breaktest), (rightPower - turn - breaktest));
+   motorController((leftPower + turn), (rightPower - turn));
     
       debugInfos();
 
@@ -318,6 +335,7 @@ void loop() {
   }// end of the void loop
 
   //We need to address all values to find out which gear to use and how much power to give.
+  //this is the function which takes the stuff and will transfom it into a byte which can be accepted by the motorshield
   void motorController(int leftControl, int rightControl){
  
    static bool leftFORWARD = true;
@@ -331,7 +349,7 @@ void loop() {
     if(leftFORWARD){
       leftFORWARD = false;
       leftMotor->run(BACKWARD);
-  
+      leftControl = leftControl - 500;
     }
    }else{
     
@@ -349,22 +367,19 @@ void loop() {
     if(rightFORWARD){
       rightFORWARD = false;
       rightMotor->run(BACKWARD);
+      rightControl = rightControl - 500;
   
     }
    }else{
     if(!rightFORWARD){
       rightFORWARD = true;
       rightMotor->run(FORWARD);
-
-      
-
-   
     }
    }
  
    //overflowprotection
-    left = min(255,abs(leftControl));
-    right = min(255, abs(rightControl));
+    left = min(255,abs((leftControl - breaktest)));
+    right = min(255, abs((rightControl - breaktest)));
        leftMotor->setSpeed(left);
        rightMotor->setSpeed(right);
     }else{
@@ -373,8 +388,7 @@ void loop() {
       leftFORWARD = false;
       rightFORWARD = false;
       }
- //   Serial.println("\t" + String(yolo) + "\t" + String(tolo)+ "\t"))
-             Serial.println(String(pidError) +"\t" + String(breaks) + "\t" + String(left) + + "\t" + String(right));
+  //   Serial.println(String(pidError) +"\t" + String(breaks) + "\t" + String(left) + + "\t" + String(right));
   
     
   }
@@ -382,6 +396,7 @@ void loop() {
         
 inline void debugInfos(){
 
+Serial.println(counterB);
 
     #ifdef GREIFARM
     Serial.println(String(actualSpeedB));
@@ -396,7 +411,7 @@ inline void debugInfos(){
     #endif
 
     #ifdef MOTOR
-    Serial.println(String(errorSpeedA) + "\t" + String(leftPower) + "\t" + String(actualSpeedA) + "\t" + String(errorIntegral) + "\t" + "\t" + String(wantedSpeedA) + "\t" + String(actualSpeedB) );
+    Serial.println(String(errorSpeedA) + "\t" + String(leftPower) + "\t" + String(actualSpeedA) + "\t" + String(errorIntegral));
     #endif
   
     #ifdef DEBUG
@@ -435,26 +450,29 @@ inline void sensorAbfrage(){
     //calculate the avg out of the raw sensor data
     leftSensor = (sensorMittelWert(leftIRPin, probeCount)) - leftSensorAdjust;
     rightSensor = (sensorMittelWert(rightIRPin, probeCount)) - rightSensorAdjust;
-    midSensor = (sensorMittelWert(midIRPin, probeCount)) - midSensorAdjust;
+ //   midSensor = (sensorMittelWert(midIRPin, probeCount)) - midSensorAdjust;
                        
  }
 
 
-
-ISR(PCINT0_vect){ //speciifc routine for "an aus knopf"
+ISR(PCINT0_vect){ //speciifc routine for "an aus knopf" and grappleknopf
   
- if((millis() - bloedeZeit) > entprellZeit)
+ if((millis() - bloedeZeit) > entprellZeit){
  
-  if ((PINB & (1 << ANAUSKNOPF)) == 0){
-    
+  if ((PINB & (1 << ANAUSKNOPF)) == 0) {
     if (enabler){
       keypressed = true;
       enabler = false;
     }
-   }
-      bloedeZeit = millis();
   }
- 
+       if ((PINB & (1 << GRAPPLEKNOPF)) == 0) {
+       if (active){
+      grappleKeypressed = true;
+      active = false;
+    }
+   }
+  } 
+}
 
 ISR(PCINT2_vect){ //speciifc routine for ENCODER
  
@@ -489,14 +507,14 @@ if (chgB & ((1 <<RECHTERMOTORPINA) | (1 << RECHTERMOTORPINB)) ){
 //    }
 
 
-    if (chgB & ((1 <<GREIFARMPINA) | (1 << GREIFARMPINB)) ){
-        altAB <<= 2; 
-        altAB &= B00001100;
+//    if (chgB & ((1 <<GREIFARMPINA) | (1 << GREIFARMPINB)) ){
+//        altEF <<= 2; 
+//        altEF &= B00001100;
 
-  altAB |= (((1 << GREIFARMPINA) & newB) >> (GREIFARMPINA-1)) | ((1 << GREIFARMPINB) & newB)>>GREIFARMPINB;
+//  altEF |= (((1 << GREIFARMPINA) & newB) >> (GREIFARMPINA-1)) | ((1 << GREIFARMPINB) & newB)>>GREIFARMPINB;
   //    altAB |= (digitalRead(GREIFARMPINA) << 1) | digitalRead(GREIFARMPINB); 
          
-        encoderWert -= schrittTab[altAB];
-    }
+//        encoderWert -= schrittTab[altEF];
+ //  }
    
 }
