@@ -19,18 +19,18 @@ Adafruit_DCMotor *grappleMotor = AFMS.getMotor(4);
 //#define NEU
 //#define DEBUG // if active we are in the DEBUGGING mode, firing the Serial.println guns
 //#define ZEIT
-//#define SENSORADJUST // use this one FIRST:  *SensorAdjust to make all Sensors equal
+#define SENSORADJUST // use this one FIRST:  *SensorAdjust to make all Sensors equal
 //#define MIDSENSOR // use midTarget to make midError = 0 if Sensor is placed on grey
 //#define LEFTSENSOR //
 //#define RIGHTSENSOR //
 //#define MOTOR
 
 // Racedriver PID
-const float kP = 0.6;
-const float kI = 0.1;
-//const float kP = 0.05;
-//const float kI = 0.01;
-const float kD = 1;
+//const float kP = 0.6;
+//const float kI = 0.1;
+const float kP = 0.05;
+const float kI = 0.01;
+const float kD = 0;
 
 
 //Motor - PI  do not change
@@ -40,12 +40,13 @@ const float kMD = 0;
 
 //TargetSpeed is the power the motors will get if we want the robot to drive straight.
 byte targetSpeed;
+
 const float breakValue = 0.8;
 float breaks;
 float breaktest;
 
-int leftSensorAdjust = 5; //use those to calibrate sensors
-int rightSensorAdjust = 45;
+int leftSensorAdjust = 0; //use those to calibrate sensors
+int rightSensorAdjust = 55;
 
 
 const byte probeCount = 5;
@@ -243,13 +244,14 @@ void loop() {
       grappleKeypressed = false;
       active = true;
       grappleTest ++;
-      Serial.println(grappleTest);
+    //  Serial.println(grappleTest);
       delay(50);
     }
 
 
    jetzt = millis();
   //tacho realzeit loop
+  
       if((jetzt - altZeitb) > deltaTacho){
       targetSpeed =map(analogRead(poti),0,1024,0,140);
 //      wantedSpeedB = wantedSpeedA; //Insert proper pid regulated wanted speeds here
@@ -263,6 +265,7 @@ void loop() {
 
       //hier wird der fehler für den tempomat bestimmt.  
       //FIXME aktuelle geschwindigkeit - sollgeschwindigkeit wäre hier ideal
+      
       errorSpeedA = targetSpeed - actualSpeedA;
       errorIntegral += errorSpeedA;
       errorIntegral=min(errorIntegral,8000);
@@ -287,8 +290,8 @@ void loop() {
     #endif
     altZeit = jetzt;
     
-      //TODO FIX OVERFLOW for jetzt
-    //getting new values - since i dont know how to proper use an array it looks like that
+      
+    //getting new sensor Data
    
     sensorAbfrage();
     
@@ -309,17 +312,18 @@ void loop() {
       bPrevError = pidError ;
       derivative = pidError - aPrevError;
         }
-      
-    //Heres how we adjust the motorspeeds!
-    //from now on on we totally ignore our secondary sensor
+
+
+     //pidError is just the difference between the sensor readings
     pidError = rightSensor - leftSensor;
-    
+
+    // the turn value is calculated by the hole pid stuff
     turn = pidError * kP + kI * integral + kD * derivative;
     
     breaks = abs(pidError) * breakValue;
     breaktest = abs(breaks);
     
-//we can adjust those values, too like leftpower/10 turn*2 ect we will add the breaks here, too
+    //we can adjust those values, too like leftpower/10 turn*2 ect we will add the breaks here, too
 
   
    //  motorController((leftPower + turn - breaktest), (rightPower - turn - breaktest));
@@ -335,6 +339,7 @@ void loop() {
 
   //We need to address all values to find out which gear to use and how much power to give.
   //this is the function which takes the stuff and will transfom it into a byte which can be accepted by the motorshield
+  
   void motorController(int leftControl, int rightControl){
  
    static bool leftFORWARD = true;
@@ -348,7 +353,6 @@ void loop() {
     if(leftFORWARD){
       leftFORWARD = false;
       leftMotor->run(BACKWARD);
-      leftControl = leftControl - 500;
     }
    }else{
     
@@ -366,7 +370,6 @@ void loop() {
     if(rightFORWARD){
       rightFORWARD = false;
       rightMotor->run(BACKWARD);
-      rightControl = rightControl - 500;
   
     }
    }else{
@@ -377,8 +380,8 @@ void loop() {
    }
  
    //overflowprotection
-    left = min(255,abs((leftControl - breaktest)));
-    right = min(255, abs((rightControl - breaktest)));
+    left = min(255,abs(leftControl));
+    right = min(255, abs(rightControl));
        leftMotor->setSpeed(left);
        rightMotor->setSpeed(right);
     }else{
@@ -387,9 +390,6 @@ void loop() {
       leftFORWARD = false;
       rightFORWARD = false;
       }
-  //   Serial.println(String(pidError) +"\t" + String(breaks) + "\t" + String(left) + + "\t" + String(right));
-  
-    
   }
 
         
