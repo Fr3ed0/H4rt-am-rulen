@@ -261,25 +261,6 @@ void loop() {
 
     actualSpeedB=(counterB-altwertB)*100.0/deltaTacho;
     altwertB=counterB;
-    
-
-      //hier wird der fehler für den tempomat bestimmt.  
-      //FIXME aktuelle geschwindigkeit - sollgeschwindigkeit wäre hier ideal
-      
-      errorSpeedA = targetSpeed - actualSpeedA;
-      errorIntegral += errorSpeedA;
-      errorIntegral=min(errorIntegral,8000);
-      errorSpeedB = targetSpeed - actualSpeedB;
-      errorIntegralB += errorSpeedB;
-      errorIntegralB=min(errorIntegralB,8000);
-
-
-  //left und right power ist also der output des tempomats ( noch kein byte für die motorregelung)
-  //targetSpeed * 2.5 ist approixmiert wie viel leistung wir benötigen. man kann als offset hier ja nicht 0 nehmen
-  //sondern wenn man 30 fahren möchte nimmt man als angenommene leistung halt byte 60 (von 255) an diese 60 werden dann nach
-  //oben oder unten geregelt
-      leftPower = (errorSpeedA * kM + errorIntegral * kMI + targetSpeed *2.5); 
-      rightPower = (errorSpeedB * kM + errorIntegralB * kMI + targetSpeed *2.5);
   }  
 
   
@@ -320,10 +301,26 @@ void loop() {
     // the turn value is calculated by the hole pid stuff
     turn = pidError * kP + kI * integral + kD * derivative;
     
-    breaks = abs(pidError) * breakValue;
-    breaktest = abs(breaks);
-    
     //we can adjust those values, too like leftpower/10 turn*2 ect we will add the breaks here, too
+
+    
+      //hier wird der fehler für den tempomat bestimmt.  
+      //FIXME aktuelle geschwindigkeit - sollgeschwindigkeit wäre hier ideal
+      
+      errorSpeedA = targetSpeed - actualSpeedA;
+      errorIntegral += errorSpeedA;
+      errorIntegral=min(errorIntegral,8000);
+      errorSpeedB = targetSpeed - actualSpeedB;
+      errorIntegralB += errorSpeedB;
+      errorIntegralB=min(errorIntegralB,8000);
+
+
+  //left und right power ist also der output des tempomats ( noch kein byte für die motorregelung)
+  //targetSpeed * 2.5 ist approixmiert wie viel leistung wir benötigen. man kann als offset hier ja nicht 0 nehmen
+  //sondern wenn man 30 fahren möchte nimmt man als angenommene leistung halt byte 60 (von 255) an diese 60 werden dann nach
+  //oben oder unten geregelt
+      leftPower = (errorSpeedA * kM + errorIntegral * kMI + targetSpeed *2.5); 
+      rightPower = (errorSpeedB * kM + errorIntegralB * kMI + targetSpeed *2.5);
 
   
    //  motorController((leftPower + turn - breaktest), (rightPower - turn - breaktest));
