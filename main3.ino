@@ -304,7 +304,7 @@ void loop() {
       // errorSpeedA und errorIntegral sind hier negativ
       }
 
-            leftPower = (errorSpeedA * kM + errorIntegral * kMI - 15); //leftPower für Rückwährtsfahrt
+            leftPower = (errorSpeedA * kM + errorIntegral * kMI - 15); //leftPower für Rückwährtsfahrt sollte negativ bevor abs sein
             
   } else {
       if(!leftFORWARD){
