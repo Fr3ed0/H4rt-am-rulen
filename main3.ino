@@ -14,8 +14,9 @@ Adafruit_DCMotor *rightMotor = AFMS.getMotor(2);
 Adafruit_DCMotor *grappleMotor = AFMS.getMotor(4);
 
 //we will use the #define stuff. ask me about it! DEACTIVATE BEFORE THE RACE STARTS!
+//#define FEHLER
 //#define GREIFARM
-#define BACKWARDS
+//#define BACKWARDS
 //#define TACHO
 //#define NEU
 //#define DEBUG // if active we are in the DEBUGGING mode, firing the Serial.println guns
@@ -27,14 +28,8 @@ Adafruit_DCMotor *grappleMotor = AFMS.getMotor(4);
 //#define MOTOR
 
 // Racedriver PID
-//const float kP = 0.6;
-//const float kI = 0.1;
-//const float kP = 0.05;
-//const float kI = 0.01;
-
 const float kP = 0.005;
 const float kI = 0.001;
-
 const float kD = 0;
 
 
@@ -46,19 +41,10 @@ const float kMD = 0;
 //TargetSpeed is the power the motors will get if we want the robot to drive straight.
 byte targetSpeed;
 
-const float breakValue = 0.8;
-float breaks;
-float breaktest;
-
 int leftSensorAdjust = 0; //use those to calibrate sensors
 int rightSensorAdjust = 55;
 
-
 const byte probeCount = 5;
-
-int haha;
-int hoho;
-
 
 int poti = A3; 
 
@@ -67,17 +53,8 @@ int leftIRPin = A0;
 int rightIRPin = A2;
 int midIRPin = A1;
 
-
-int midSensorAdjust = 0;
-
-
 int leftSensor;
 int rightSensor;
-int midSensor;
-
-//leftError is (the reading - the target)
-
-int midError;
 
 int pidError;
 
@@ -87,7 +64,6 @@ long integral;
 
 int rightPower;
 int leftPower;
-
 
 
 //derivative stuff
@@ -102,27 +78,23 @@ int rightSpeed;
 
 //lightSensorStuff
 
-
-#ifdef SENSORADJUST
-int ml;
-int mr; 
-int lr;
-#endif
-
-//motorPID
+//motorPI
 int actualSpeedA;//our tacho
 int actualSpeedB;
-/*
-int wantedSpeedA; //the value set by our pid sensor cycle
+
+int wantedSpeedA;
 int wantedSpeedB;
 
-int wantedSpeedAoK;
-int wantedSpeedBoK;
-*/
+int errorSpeedA; //the value used to adjust motor power
 int errorSpeedB;
 
-int errorSpeedA; //the value used to adjust motor power
-int lgear;
+float errorIntegral;
+float errorIntegralB; 
+
+bool leftFORWARD = true;
+bool rightFORWARD = true;
+
+int lgear; //those are only for tests
 int rgear;
 
 
@@ -170,23 +142,9 @@ int SpeedA;
 int altwertB;
 int SpeedB;
 const byte deltaTacho=100; // chose your value according to your prefered max range 
-int wantedSpeedA;
-int wantedSpeedB;
 
 //greifarm stuff
 int8_t schrittTab[16] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0}; 
-
-//motorregelung
-
-bool leftFORWARD = true;
-bool rightFORWARD = true;
-
-
-float errorIntegral;
-float errorIntegralB; 
-int aSA;
-int der;
-
 
 //delta t time loop
 long jetzt = 0;
@@ -212,32 +170,28 @@ PCMSK2 |= (1 << RECHTERMOTORPINB);// for the second motor ** 00001100
 DDRD&=~PCMSK2; //if DDRD is 0 on the specific bit = input
 PORTD |= PCMSK2; //arduino intern pullup resistor
 
-
-  
  Serial.begin(9600);           // set up Serial baud to 115200 bps
   AFMS.begin();  // start motorshield with the default frequency 1.6KHz
   //AFMS.begin(1000);  // OR with a different frequency, say 1KHz
   
     //We are reading both values and trash them. the first readings are just that.
     // Set motor direction
-  rightMotor->run(FORWARD);
+   rightMotor->run(FORWARD);
    leftMotor->run(FORWARD);
  //     leftMotor->run(RELEASE);
  //     rightMotor->run(RELEASE);
  //    leftMotor->run(BACKWARD);
  //   rightMotor->run(BACKWARD);
-  //   integral = 0 ;
-  //   errorIntegral = 0;
+    integral = 0 ;
+    errorIntegral = 0;
   //TODO make tests for all them hardware!
-//    Serial.println("Adafruit Motorshield v2 - ready!");
-//    Serial.println("All Systems GO!");
-
 interrupts();
 }
 
 
 void loop() {
-
+  targetSpeed =map(analogRead(poti),0,1024,0,140);
+  
   //An aus knopf 
     if (keypressed){
       isDriving = !isDriving;
@@ -247,7 +201,7 @@ void loop() {
       errorIntegralB = 0;
         enabler = true;
         delay(50);
-    }
+      }
 
    //180grad dreh knopf
     if (grappleKeypressed){
@@ -263,17 +217,14 @@ void loop() {
   //tacho realzeit loop
   
       if((jetzt - altZeitb) > deltaTacho){
-      targetSpeed =map(analogRead(poti),0,1024,0,140);
-//      wantedSpeedB = wantedSpeedA; //Insert proper pid regulated wanted speeds here
     altZeitb = jetzt;    
     actualSpeedA=(counterA-altwertA)*100.0/deltaTacho;
     altwertA=counterA;
 
     actualSpeedB=(counterB-altwertB)*100.0/deltaTacho;
     altwertB=counterB;
-  }  
+        }  
 
-  
   if((jetzt - altZeit) > deltaT){
     
    #ifdef ZEIT 
@@ -291,7 +242,7 @@ void loop() {
     integral = integral + pidError;
     if(pidError<=10 && pidError>=-10){
       integral = 0;
-    }
+     }
       
     //derivate stuff
     //adding the nessesary things for the derivative -Whoppa FlipFlop Style
@@ -316,13 +267,10 @@ void loop() {
       // wantedSpeed is the speed, which combines our constant "targetSpeed" and the "turn" value
       // it can be negative and positive
       // it must be adjustet with the PI-Motor-Regelung and is at the verry end a byte (0-255 only positive)
-    wantedSpeedA = targetSpeed + turn;
-    wantedSpeedB = targetSpeed - turn;
+      wantedSpeedA = targetSpeed + turn;
+      wantedSpeedB = targetSpeed - turn;
 
-
-    
       //hier wird der fehler für den tempomat bestimmt.  
-      
       errorSpeedA =wantedSpeedA - actualSpeedA;
       errorIntegral += errorSpeedA;
       errorIntegral=min(errorIntegral,8000);
@@ -342,12 +290,10 @@ void loop() {
   // wenn errorSpeedA negativ wird (turn ist negativ und zwar so negativ, dass es targetSpeed auskontert)
   // wenn wantedSpeed vorzeichen wechselt, sollten wir das errorIntegral auf 0 setzten
  
- 
-
   if(isDriving){  //erstmal jetzt die schalterlogik (bis unten)
   
   if (wantedSpeedA < 0){
-    //durch diese art spammen wir die gang wahl nicht, sondern machen sie nur einmal. 
+    //durch diese art spammen wir die Gangwahl nicht, sondern machen sie nur einmal. 
     
       if(leftFORWARD){
       leftFORWARD = false;
@@ -356,16 +302,17 @@ void loop() {
       //diese 15 könnten viel zu hoch sein
       //hier muss man rumprobieren, wenn er - falls er rückwährts fährt - zu SCHNELL rückwährts fährt
       // errorSpeedA und errorIntegral sind hier negativ
-       leftPower = (errorSpeedA * kM + errorIntegral * kMI - 15); //leftPower für Rückwährtsfahrt
       }
-    
+
+            leftPower = (errorSpeedA * kM + errorIntegral * kMI - 15); //leftPower für Rückwährtsfahrt
+            
   } else {
       if(!leftFORWARD){
       leftFORWARD = true;
       leftMotor->run(FORWARD);
       }
     
-    leftPower = (errorSpeedA * kM + errorIntegral * kMI + targetSpeed *2.5); //leftPower für Vorwährtsfahrt
+            leftPower = (errorSpeedA * kM + errorIntegral * kMI + targetSpeed *2.5); //leftPower für Vorwährtsfahrt
   }
 
     //das selbe fürs rechte rad:
@@ -374,14 +321,15 @@ void loop() {
       rightFORWARD = false;
       errorIntegralB = 0;
       rightMotor->run(BACKWARD);
-      rightPower = (errorSpeedB * kM + errorIntegralB * kMI - 15);
     }
+           rightPower = (errorSpeedB * kM + errorIntegralB * kMI - 15);
+           
    }else{
     if(!rightFORWARD){
       rightFORWARD = true;
       rightMotor->run(FORWARD);
       }
-      rightPower = (errorSpeedB * kM + errorIntegralB * kMI + targetSpeed *2.5);
+          rightPower = (errorSpeedB * kM + errorIntegralB * kMI + targetSpeed *2.5);
    }
   }else{ //ende an aus schalter
       leftMotor->run(RELEASE);
@@ -390,15 +338,10 @@ void loop() {
       rightFORWARD = false;
       }
 
-  
-   
    motorController((leftPower), (rightPower));
       debugInfos();
 
-      
     } //end of the timed loop   
-
-     
   }// end of the void loop
 
   //We need to address all values to find out which gear to use and how much power to give.
@@ -416,13 +359,16 @@ void loop() {
     right = min(255, abs(rightControl));
        leftMotor->setSpeed(left);
        rightMotor->setSpeed(right);
-    
       }
 
         
 inline void debugInfos(){
 
 //Serial.println(counterB);
+
+    #ifdef FEHLER
+    Serial.println(String(pidError) + "\t " + String(integral) + "\t" +String(derivative) + "\t " + String(turn));
+    #endif
 
     #ifdef GREIFARM
     Serial.println(String(actualSpeedB));
