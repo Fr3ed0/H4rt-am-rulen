@@ -1,0 +1,81 @@
+
+//interrupt for taster ect
+volatile bool enabler = true;
+volatile bool keypressed = false;
+
+volatile bool active = true;
+volatile bool grappleKeypressed = false;
+
+
+volatile unsigned long bloedeZeit=0;
+volatile const int entprellZeit=1000;
+
+
+bool isDriving;
+
+#define ANAUSKNOPF 0
+
+#define GRAPPLEKNOPF 5
+
+
+int grappleTest;
+
+void setup() {
+
+  //Interrupt stuff
+PCICR |= (1 << PCIE0); // interrupts on port B (Pin 8 still 13, (goes intern from 0 to 7))
+PCMSK0 |= (1 << ANAUSKNOPF);
+PCMSK0 |= (1 << GRAPPLEKNOPF);
+DDRB&=~PCMSK0; //if DDRD is 0 on the specific bit = input
+PORTB |= PCMSK0; //arduino intern pullup resistor
+
+
+ Serial.begin(9600);           // set up Serial baud to 115200 bps
+
+ 
+interrupts();
+
+}
+
+void loop() {
+
+  //An aus knopf 
+    if (keypressed){
+      isDriving = !isDriving;
+      keypressed = false;
+        enabler = true;
+        delay(50);
+      }
+
+   //greifarm knopf
+    if (grappleKeypressed){
+      grappleKeypressed = false;
+      active = true;
+      grappleTest ++;
+    //  Serial.println(grappleTest);
+
+    
+      delay(50);
+    }
+  // put your main code here, to run repeatedly:
+
+}
+
+ISR(PCINT0_vect){ //speciifc routine for "an aus knopf" and grappleknopf
+  
+ if((millis() - bloedeZeit) > entprellZeit){
+ 
+  if ((PINB & (1 << ANAUSKNOPF)) == 0) {
+    if (enabler){
+      keypressed = true;
+      enabler = false;
+    }
+  }
+       if ((PINB & (1 << GRAPPLEKNOPF)) == 0) {
+       if (active){
+      grappleKeypressed = true;
+      active = false;
+    }
+   }
+  } 
+}
