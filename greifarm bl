@@ -1,0 +1,123 @@
+#include <Wire.h>
+#include <Adafruit_MotorShield.h>
+#include <math.h>
+
+Adafruit_MotorShield AFMS = Adafruit_MotorShield();
+
+Adafruit_DCMotor *greifMotor = AFMS.getMotor(4);
+
+#define ANAUSKNOPF 0
+
+#define LINKERMOTORPINA 2
+#define LINKERMOTORPINB 3
+
+#define RECHTERMOTORPINA 6
+#define RECHTERMOTORPINB 7
+
+#define GREIFARMPINA 4
+#define GREIFARMPINB 5
+
+volatile  uint8_t lastB = 0;   
+volatile  int16_t counterA;
+volatile  int16_t counterB;
+volatile int8_t altAB = 0;
+volatile int8_t altCD = 0;
+volatile int8_t altEF = 0;
+volatile long encoderWert = 0; 
+
+//interrupt for taster ect
+volatile bool enabler = true;
+volatile bool keypressed = false;
+volatile unsigned long bloedeZeit=0;
+const int entprellZeit=1000;
+
+int8_t schrittTab[16] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0}; 
+long test;
+long jetzt;
+long altZeitb;
+
+long testZeit = 100;
+void setup() {
+
+    //Interrupt stuff
+PCICR |= (1 << PCIE0); // interrupts on port B (Pin 8 still 13, (goes intern from 0 to 7))
+PCMSK0 |= (1 << ANAUSKNOPF);
+DDRB&=~PCMSK0; //if DDRD is 0 on the specific bit = input
+PORTB |= PCMSK0; //arduino intern pullup resistor
+
+PCICR |= (1 << PCIE2); //arduino will react on interrupts on port D
+PCMSK2 |= (1 << LINKERMOTORPINA);
+PCMSK2 |= (1 << LINKERMOTORPINB); // 2 defines the pin which listens for motor encoder (must be on portD)
+PCMSK2 |= (1 << RECHTERMOTORPINA);
+PCMSK2 |= (1 << RECHTERMOTORPINB);// for the second motor ** 00001100
+PCMSK2 |= (1 << GREIFARMPINA);
+PCMSK2 |= (1 << GREIFARMPINB);
+DDRD&=~PCMSK2; //if DDRD is 0 on the specific bit = input
+PORTD |= PCMSK2; //arduino intern pullup resistor
+
+
+Serial.begin(9600);           // set up Serial baud to 115200 bps
+  AFMS.begin();
+
+     greifMotor->run(FORWARD);
+ //    greifMotor->run(RELEASE);
+ //    greifMotor->run(BACKWARD);
+
+ interrupts();
+}
+
+void loop() {
+    encoderWert = 0;
+    greifMotor->run(FORWARD);
+    greifMotor->setSpeed(60);
+    delay(1500);
+   
+    greifMotor->setSpeed(60);
+    greifMotor->run(BACKWARD);
+    delay(1200);
+}
+
+ISR(PCINT2_vect){ //speciifc routine for ENCODER
+ 
+  uint8_t newB = PIND;                  // aktuellen Port speichern
+  uint8_t chgB = newB ^ lastB;          // geänderte Bits zum letzten Port
+  lastB = newB;                         // neuer Port wird zum alten für die nächste Runde
+
+if (chgB & ((1 <<LINKERMOTORPINA) | (1 << LINKERMOTORPINB)) ){
+        altCD <<= 2; 
+        altCD &= B00001100;
+
+  altCD |= (((1 << LINKERMOTORPINA) & newB) >> (LINKERMOTORPINA-1)) | ((1 << LINKERMOTORPINB) & newB)>>LINKERMOTORPINB;
+//        altCD |= (digitalRead(LINKERMOTORPINA) << 1) | digitalRead(LINKERMOTORPINB); 
+        counterA -= schrittTab[altCD];
+    }
+
+if (chgB & ((1 <<RECHTERMOTORPINA) | (1 << RECHTERMOTORPINB)) ){
+        altAB <<= 2; 
+        altAB &= B00001100;
+
+  altAB |= (((1 << RECHTERMOTORPINA) & newB) >> (RECHTERMOTORPINA-1)) | ((1 << RECHTERMOTORPINB) & newB)>>RECHTERMOTORPINB;
+         
+        counterB -= schrittTab[altAB];
+    }
+
+    
+//    if (chgB & (1 << LINKERMOTORPIN)) {
+//     counterA++;
+//    }
+//     if (chgB & (1 << RECHTERMOTORPIN)) {
+//     counterB++;
+//    }
+
+
+    if (chgB & ((1 <<GREIFARMPINA) | (1 << GREIFARMPINB)) ){
+        altEF <<= 2; 
+        altEF &= B00001100;
+
+  altEF |= (((1 << GREIFARMPINA) & newB) >> (GREIFARMPINA-1)) | ((1 << GREIFARMPINB) & newB)>>GREIFARMPINB;
+  //    altAB |= (digitalRead(GREIFARMPINA) << 1) | digitalRead(GREIFARMPINB); 
+         
+        encoderWert -= schrittTab[altEF];
+    }
+   
+}
