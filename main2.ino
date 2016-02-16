@@ -238,22 +238,19 @@ void loop() {
         delay(50);
     }
 
-
    //180grad dreh knopf
     if (grappleKeypressed){
       grappleKeypressed = false;
       active = true;
       grappleTest ++;
       Serial.println(grappleTest);
-      
       delay(50);
     }
 
 
    jetzt = millis();
   //tacho realzeit loop
-  if((jetzt - altZeitb) > deltaTacho){
-    
+      if((jetzt - altZeitb) > deltaTacho){
       targetSpeed =map(analogRead(poti),0,1024,0,140);
 //      wantedSpeedB = wantedSpeedA; //Insert proper pid regulated wanted speeds here
     altZeitb = jetzt;    
@@ -264,7 +261,8 @@ void loop() {
     altwertB=counterB;
     
 
-      //tempomat
+      //hier wird der fehler für den tempomat bestimmt.  
+      //FIXME aktuelle geschwindigkeit - sollgeschwindigkeit wäre hier ideal
       errorSpeedA = targetSpeed - actualSpeedA;
       errorIntegral += errorSpeedA;
       errorIntegral=min(errorIntegral,8000);
@@ -272,12 +270,13 @@ void loop() {
       errorIntegralB += errorSpeedB;
       errorIntegralB=min(errorIntegralB,8000);
 
-    der=errorSpeedA - aSA;
-    aSA=errorSpeedA;
 
   //left und right power ist also der output des tempomats ( noch kein byte für die motorregelung)
-      leftPower = (errorSpeedA * kM + errorIntegral * kMI + targetSpeed *2.5 + der*kMD); 
-      rightPower = (errorSpeedB * kM + errorIntegralB * kMI + targetSpeed *2.5 + der*kMD);
+  //targetSpeed * 2.5 ist approixmiert wie viel leistung wir benötigen. man kann als offset hier ja nicht 0 nehmen
+  //sondern wenn man 30 fahren möchte nimmt man als angenommene leistung halt byte 60 (von 255) an diese 60 werden dann nach
+  //oben oder unten geregelt
+      leftPower = (errorSpeedA * kM + errorIntegral * kMI + targetSpeed *2.5); 
+      rightPower = (errorSpeedB * kM + errorIntegralB * kMI + targetSpeed *2.5);
   }  
 
   
@@ -324,8 +323,8 @@ void loop() {
 
   
    //  motorController((leftPower + turn - breaktest), (rightPower - turn - breaktest));
+   
    motorController((leftPower + turn), (rightPower - turn));
-    
       debugInfos();
 
       
@@ -445,6 +444,8 @@ inline int sensorMittelWert(byte sensorPin, byte probeCountHorst){
     }
 
 
+
+//Hier werden die Sensoren einfach nur abgefragt und durchschnittswert ermittelt.
 inline void sensorAbfrage(){
   
     //calculate the avg out of the raw sensor data
