@@ -382,12 +382,7 @@ void loop() {
       rightMotor->run(FORWARD);
       }
       rightPower = (errorSpeedB * kM + errorIntegralB * kMI + targetSpeed *2.5);
-   
    }
-  
- 
-
-
   }else{ //ende an aus schalter
       leftMotor->run(RELEASE);
       rightMotor->run(RELEASE);
@@ -421,7 +416,7 @@ void loop() {
     right = min(255, abs(rightControl));
        leftMotor->setSpeed(left);
        rightMotor->setSpeed(right);
-    }
+    
       }
 
         
